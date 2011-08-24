@@ -1,7 +1,7 @@
 a) Purpose of these scripts:
 ----------------------------
 
-These scripts are intendet to run on a Soekris net5501-70 (512 MB RAM) embedded system 
+These scripts are intended to run on a Soekris net5501-70 (512 MB RAM) embedded system 
 with a 4 GB Compact Flash (CF) as storage device. But with little modifications 
 they can also be used to run on other devices. 
 
@@ -9,15 +9,15 @@ Because NAND CFs have "only" a write endurance of ~1,000,000 cycles per location
 is a good idea to swap highly used parts of the OS to a ramdisk. In this case /var.
 Like this we can increase the CF lifetime and mount i.e. the root partition in read only.
 
-As a little gadget the soekris GPIO error LED is activated when a script error occures.
+As a little gadget the soekris GPIO error LED is activated when a script error occurs.
 
 Tests here were made with an Ubuntu10.04 server 32Bit system on Soekris net5501-70 hardware.
 
 
-b) Howto use these scripts:
+b) How to use these scripts:
 ---------------------------
 
-1) The CF partition sheme must consist of these partitions:
+1) The CF partition scheme must consist of these partitions:
    /          #root tree partition, i.e. 3,5GB
    /var       #var partition, i.e. 200MB
    /varbak    #varbak partition, i.e. 200MB. This is a helper partition for syncing data etc...
