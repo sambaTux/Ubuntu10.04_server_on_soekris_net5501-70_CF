@@ -1,9 +1,9 @@
-a) Purpose of this scripts:
----------------------------
+a) Purpose of these scripts:
+----------------------------
 
 These scripts are intendet to run on a Soekris net5501-70 (512 MB RAM) embedded system 
 with a 4 GB Compact Flash (CF) as storage device. But with little modifications 
-they can also be used to run on other device. 
+they can also be used to run on other devices. 
 
 Because NAND CFs have "only" a write endurance of ~1,000,000 cycles per location, it 
 is a good idea to swap highly used parts of the OS to a ramdisk. In this case /var.
