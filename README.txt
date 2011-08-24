@@ -5,7 +5,7 @@ These scripts are intended to run on a Soekris net5501-70 (512 MB RAM) embedded 
 with a 4 GB Compact Flash (CF) as storage device. But with little modifications 
 they can also be used to run on other devices. 
 
-Because NAND CFs have "only" a write endurance of ~1,000,000 cycles per location, it 
+Because NAND CF has "only" a write endurance of ~1,000,000 cycles per location, it 
 is a good idea to swap highly used parts of the OS to a ramdisk. In this case /var.
 Like this we can increase the CF lifetime and mount i.e. the root partition in read only.
 
