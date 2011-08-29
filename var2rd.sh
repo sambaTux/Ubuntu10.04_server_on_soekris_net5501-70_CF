@@ -319,7 +319,20 @@ echo "FIND: Done." >>"$lf"
 
 
 # Before we can unmount /var/lock and /var/run, we have to save their data first.
-# That's because both dirs are using a tmpfs (at least on Ubuntu 10.04)
+# That's because both dirs are using a tmpfs (at least on Ubuntu 10.04).
+# The very first time this script runs, there is no /varbak/{run,lock} dir, thus we create it.
+if [[ ! -d "${varbak}/run" ]]; then
+   echo "MKDIR: Creating $varbak/run" >>"$lf"
+   mkdir -m 755 "${varbak}/run" >> "$lf" 2>&1
+   echo "MKDIR: Done." >>"$lf"
+fi
+
+if [[ ! -d "${varbak}/lock" ]]; then 
+   echo "MKDIR: Creating $varbak/lock" >>"$lf"
+   mkdir -m 1777 "${varbak}/lock" >>"$lf" 2>&1
+   echo "MKDIR: Done." >>"$lf"
+fi
+
 echo "RSYNC: Start sync. /varbak/run (CF) with /var/run (tmpfs)" >>"$lf"
 rsync $rsyncopts1 /var/run/ /varbak/run >>"$lf"
 echo "RSYNC: Done." >>"$lf"
