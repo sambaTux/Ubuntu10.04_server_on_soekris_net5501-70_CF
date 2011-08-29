@@ -56,8 +56,9 @@ var2rd.sh
    - get list of processes which are accessing /var
    - stop/kill those proccesses
    - clean /var/cache
-   - unmount tmpfs /var/lock and /var/run
-   - sync /var (CF) with /varbak (CF)
+   - sync /varbak/{run,lock} (CF) with /var/{run,lock} (tmpfs)
+   - unmount /var/{run,lock} (tmpfs)
+   - sync /varbak (CF) with /var (CF)
    - format ramdisk /dev/ram0
    - mount ramdisk on /var
    - sync /var (ramdisk) with /varbak (CF)
