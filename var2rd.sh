@@ -119,6 +119,7 @@ start_excludes=("dhclient3")
 
 lfdir="/media/var2rd"       #mount point for the logfile (tmpfs)
 lf="${lfdir}/var2rd.log"    #logfile
+logtmpfs_size="200k"        #size of logfile tmpfs 
 t=`date +%Y.%m.%d-%H:%M:%S` 
 ramdisk="/dev/ram0"
 var="/var"
@@ -137,10 +138,10 @@ if [[ ! -d "$lfdir" ]]; then
 fi
 
 
-# To keep the logfile of this script while its running, we need a temporary place
+# To keep the logfile of this script while it is running, we need a temporary place
 # until this script has done its job. This is because we are doing a mount round trip. 
 # Hence we will mount a tmpfs somewhere to keep the logfile for a while.
-mount -t tmpfs -o rw,size=1M,mode=600 tmpfs "$lfdir"
+mount -t tmpfs -o rw,size="$logtmpfs_size",mode=600 tmpfs "$lfdir"
 
 
 # Create logfile if not already done
