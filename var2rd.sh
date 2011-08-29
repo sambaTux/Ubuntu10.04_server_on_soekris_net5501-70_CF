@@ -126,16 +126,16 @@ varbak="/varbak"
 rdfstype="-t ext2"                                    #option for mkfs AND mount.
 rdmountopts="-o rw,nosuid,nodev,nouser"               #options for mount cmd to mount ramdisk
 rdlabel="varrd"                                       #ramdisk label
-rsyncopts1="-rogptl --delete-before --exclude=err"    #options for first rsync cmd.
-rsyncopts2="-rogptl --delete-before"                  #options for second rsync cmd. 
-
-# NOTE: We need 2 rsync cmds in order to preserve the crash/error logfiles.
+rsyncopts1="-rogptl --delete-before"                             #sync /varbak/{run,lock} (CF) with /var/{run,lock} (tmpfs)
+rsyncopts2="-rogptl --delete-before --exclude=err --exclude=run --exclude=lock"    #sync /varbak/ (CF) with /var/ (CF)
+rsyncopts3="-rogptl --delete-before"                             #sync /var (ramdisk) with /varbak (CF)
 
 
 # Create mount point for the logfile (tmpfs) 
 if [[ ! -d "$lfdir" ]]; then
    mkdir -m 750 "$lfdir"
 fi
+
 
 # To keep the logfile of this script while its running, we need a temporary place
 # until this script has done its job. This is because we are doing a mount round trip. 
@@ -318,6 +318,17 @@ find /var/cache/ -type f -exec rm -r '{}' \; >/dev/null 2>>"$lf"
 echo "FIND: Done." >>"$lf"
 
 
+# Before we can unmount /var/lock and /var/run, we have to save their data first.
+# That's because both dirs are using a tmpfs (at least on Ubuntu 10.04)
+echo "RSYNC: Start sync. /varbak/run (CF) with /var/run (tmpfs)" >>"$lf"
+rsync $rsyncopts1 /var/run/ /varbak/run >>"$lf"
+echo "RSYNC: Done." >>"$lf"
+ 
+echo "RSYNC: Start sync. /varbak/lock (CF) with /var/lock (tmpfs)" >>"$lf"
+rsync $rsyncopts1 /var/lock/ /varbak/lock >>"$lf"
+echo "RSYNC: Done." >>"$lf"
+
+
 # Unmount /var/lock and /var/run
 echo "UMOUNT: Unmounting /var/lock and /var/run ..." >>"$lf"
 umount "${var}/lock" >>"$lf" 2>&1
@@ -326,14 +337,14 @@ echo "UMOUNT: Done." >>"$lf"
 
 
 # Sync /varbak with /var 
-echo "RSYNC: Start sync $varbak (hdd/CF) with $var (hdd/CF):" >>"$lf"
-rsync $rsyncopts1 "${var}/" "${varbak}/" >>"$lf" 2>&1
+echo "RSYNC: Start sync. $varbak (CF) with $var (CF):" >>"$lf"
+rsync $rsyncopts2 "${var}/" "${varbak}/" >>"$lf" 2>&1
 echo "RSYNC: Done." >>"$lf"
 
  
 # Format ramdisk 
 echo "MKFS: Formating ramdisk ..." >>"$lf"
-mkfs $rdfstype -m 0 -L "$dlabel" "$ramdisk" >>"$lf" 2>&1 
+mkfs $rdfstype -m 0 -L "$rdlabel" "$ramdisk" >>"$lf" 2>&1 
 echo "MKFS: Done." >>"$lf"
 
 
@@ -344,9 +355,9 @@ mount $rdfstype $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
 echo "MOUNT: Done." >>"$lf"
 
 
-# Sync /var (ramdisk) with /varbak (hdd/CF)
-echo "RSYNC: Start syncing $var (ramdisk) with $varbak (hdd/CF)" >>"$lf"
-rsync $rsyncopts2 "${varbak}/" "${var}/" >>"$lf" 2>&1
+# Sync /var (ramdisk) with /varbak (CF)
+echo "RSYNC: Start syncing $var (ramdisk) with $varbak (CF)" >>"$lf"
+rsync $rsyncopts3 "${varbak}/" "${var}/" >>"$lf" 2>&1
 echo "RSYNC: Done." >>"$lf"
 
 
@@ -381,20 +392,24 @@ for p in ${!stop_list[@]} ; do
 done 
 echo "START: Done." >>"$lf"
 
+
 # Copy logfile from tmpfs to /var (ramdisk)
-# NOTE: this logfile will NOT be saved to hdd/CF (/var) until the script
+# NOTE: this logfile will NOT be saved to CF (/var) until the script
 #       "varbak.sh" runs!
 echo "CAT: Append "$lf" (tmpfs) to $var/log/var2rd.log (ramdisk)" >>"$lf"
 cat "$lf" >>"${var}/log/var2rd.log"
+
 
 # Change path to logfile
 lf="${var}/log/var2rd.log"
 echo "CAT: Done" >>"$lf"
 
+
 # Unmount logfile tmpfs
 echo "UMOUNT: Unmounting logfile tmpfs $lfdir ..." >>"$lf"
 umount "$lfdir" >>"$lf" 2>&1
 echo "UMOUNT: Done." >>"$lf"
+
 
 # Insert end flag into logfile
 echo "" >>"$lf"
