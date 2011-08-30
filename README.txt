@@ -46,7 +46,6 @@ os-config.sh
    - turn off fsck for root partition
    - deactivate  "multiverse" and "universe" repos to save ~60MB in /var/lib/apt/lists/
    - set swappiness to 0 (def. = 60)
-   - create mount points for logfiles and create /var/err
 
 var2rd.sh
 
