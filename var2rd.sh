@@ -60,7 +60,7 @@ function lastact() {
   fi
 
   # Activate error led
-  "$error_led" --fatal &
+  "$error_led" --fatal "$errlf" &
   exit 1
 }
 
