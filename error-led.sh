@@ -99,7 +99,7 @@ case "$1" in
    ;; 
    
    "--warn-off") # Deactivate warning led. I.e when "varbak.sh" has enough free RAM again.
-                 echo "INFO: Deactivating slow blinking error led ..." >>"$lf"
+                 echo "INFO: Deactivating slow blinking error led. Enough free RAM for data sync." >>"$lf"
                  echo 0 >"$dev"
    ;;                 
 esac
