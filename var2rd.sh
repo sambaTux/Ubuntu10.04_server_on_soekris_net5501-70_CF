@@ -16,7 +16,7 @@
 #                  I.e. "ramdisk_size=170000" (~ 170 MB). And dont forget to invoke "update-grub" and "reboot" so
 #                  that ramdisk size is active. This config can also be done with "os-config.sh" script.
 #                - If you want to mount the root partition in read only mode, don't use this script but use 
-#                  /etc/rc.local instead. 
+#                  /etc/rc.local instead, because it's possible that the script disturbs itself while remounting /. 
 #                - The "error-led.sh" script is started as bg job.
 
 # LICENSE      : Copyright (C) 2011 Robert Schoen
@@ -93,8 +93,11 @@ fi
 # /varbak/err/. Yes, /varbak/err. We can only tell rsync to exclude dirs or
 # files in the source, and not in the destination. Thus, we create /var/err/ in the source 
 # in order to preserve /varbak/err while syncing /varbak with /var.
-[[ ! -d /var/err ]] && mkdir -m 700 /var/err
-
+if [[ ! -d /var/err ]]; then
+   echo "MKDIR: Creating /var/err (CF) ..." 
+   mkdir -m 700 /var/err
+   echo "MKDIR: Done."
+fi
 
 ###################################################################################
 ###################################################################################
@@ -115,7 +118,7 @@ fi
 declare -a stop_excludes start_excludes
 declare -A stop_list  
 
-stop_excludes=("`basename "$0"`" "grep" "cut" "uniq" "plymouthd" "rc.local" "ureadahead-other" "ssh")
+stop_excludes=("`basename "$0"`" "grep" "cut" "uniq" "plymouthd" "rc.local" "ssh")
 start_excludes=("dhclient3")
 
 lfdir="/media/var2rd"       #mount point for the logfile (tmpfs)
@@ -137,20 +140,28 @@ rsyncopts3="-rogptl --delete-before"                             #sync /var (ram
 # Create mount points for the logfile (tmpfs) of "var2rd.sh" and "varbak.sh"
 # Creating it for "varbak.sh" now is usefull when we want to mount / in read only later.
 if [[ ! -d "$lfdir" ]]; then
+   echo "MKDIR: Creating mount point $lfdir ..."
    mkdir -m 700 "$lfdir" 
+   echo "MKDIR: Done."
 fi
 if [[ ! -d "$lfdir2" ]]; then
+   echo "MKDIR: Creating mount point $lfdir ..."
    mkdir -m 700 "$lfdir2"
+   echo "MKDIR: Done."
 fi
+
 
 # To keep the logfile of this script while it is running, we need a temporary place
 # until this script has done its job. This is because we are doing a mount round trip. 
 # Hence we will mount a tmpfs somewhere to keep the logfile for a while.
+echo "MOUNT: Mounting tmpfs for logfile ..."
 mount -t tmpfs -o rw,size="$logtmpfs_size",mode=600 tmpfs "$lfdir"
+echo "MOUNT: Done."
 
 
 # Create logfile if not already done
 if [[ ! -f "$lf" ]]; then
+   echo "INFO: Creating logfile ..."
    touch "$lf"
    chown root.root "$lf"
    chmod 0600 "$lf"
@@ -418,7 +429,6 @@ echo "START: Done." >>"$lf"
 echo "CAT: Append "$lf" (tmpfs) to $var/log/var2rd.log (ramdisk)" >>"$lf"
 cat "$lf" >>"${var}/log/var2rd.log"
 
-
 # Change path to logfile
 lf="${var}/log/var2rd.log"
 echo "CAT: Done" >>"$lf"
@@ -428,6 +438,12 @@ echo "CAT: Done" >>"$lf"
 echo "UMOUNT: Unmounting logfile tmpfs $lfdir ..." >>"$lf"
 umount "$lfdir" >>"$lf" 2>&1
 echo "UMOUNT: Done." >>"$lf"
+
+
+# To ensure that "varbak.sh" can use the soekris error led, even if / is mounted
+# in read only, this script prepares everthing for that usage, because now / is 
+# still writable. "error-led.sh" uses the same logfile as this script does.
+"$error_led" --prepare "$lf"
 
 
 # Insert end flag into logfile
