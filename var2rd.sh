@@ -443,6 +443,7 @@ echo "UMOUNT: Done." >>"$lf"
 # To ensure that "varbak.sh" can use the soekris error led, even if / is mounted
 # in read only, this script prepares everthing for that usage, because now / is 
 # still writable. "error-led.sh" uses the same logfile as this script does.
+echo "INFO: Calling $error_led ..." >>"$lf"
 "$error_led" --prepare "$lf"
 
 
