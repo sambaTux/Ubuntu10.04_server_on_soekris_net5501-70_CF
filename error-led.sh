@@ -12,6 +12,10 @@
 # NOTE         : See http://www.kernel.org/pub/linux/docs/device-list/devices.txt 
 #                for info about minor and major device numbers.
 
+# Define var
+dev="/dev/error_led"
+
+
 # Prepare everything for the error led usage. "--prepare" is only used by "var2rd.sh".
 # This ensures that "varbak.sh" can also use the error led, even if / is mounted in read only.
 case "$1" in
@@ -22,9 +26,6 @@ case "$1" in
  
         echo "TASK: Preparing everything for the error led usage ..." >>"$lf" 
        
-        # Create error led node:
-        dev="/dev/error_led"
-
         # Load required modules
         echo "MODPROBE: Loading modules ..." >>"$lf"
         modprobe cs5535_gpio >>"$lf" 2>&1
