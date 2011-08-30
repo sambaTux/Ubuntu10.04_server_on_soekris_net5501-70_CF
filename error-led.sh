@@ -12,8 +12,12 @@
 # NOTE         : See http://www.kernel.org/pub/linux/docs/device-list/devices.txt 
 #                for info about minor and major device numbers.
 
-# Define var
+# Define vars
 dev="/dev/error_led"
+# Define logfile. Use the same as the calling script.
+lf="$2" 
+# Define calling script
+parent="$3"
 
 
 # Prepare everything for the error led usage. "--prepare" is only used by "var2rd.sh".
@@ -21,9 +25,6 @@ dev="/dev/error_led"
 case "$1" in
    "--prepare")
         
-        # Define logfile. Use the same as "var2rd.sh".
-        lf="$2"    
- 
         echo "TASK: Preparing everything for the error led usage ..." >>"$lf" 
        
         # Load required modules
@@ -69,11 +70,13 @@ case "$1" in
 
 
    "--fatal")    # A script failed/crashed
+                 echo "FATAL: Activating non-blinking error led. " >>"$lf"
                  echo 1 >"$dev"    
    ;;
 
    "--warning")  # A script doesn't run in optimal modus. 
                  # I.e. when not enough free RAM available for "varbak.sh" to sync. data.
+                 echo "WARN: Activating blinking error led. Not enough free RAM for data sync." >>"$lf"
                  while true; do
                    echo 1 >"$dev"
                    sleep 1
@@ -83,6 +86,7 @@ case "$1" in
    ;; 
    
    "--warn-off") # Deactivate warning led. I.e when "varbak.sh" has enough free RAM again.
+                 echo "INFO: Deactivating blinking error led ..." >>"$lf"
                  echo 0 >"$dev"
    ;;                 
 esac
