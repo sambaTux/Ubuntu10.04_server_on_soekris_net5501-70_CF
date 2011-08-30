@@ -1,31 +1,32 @@
 #!/bin/bash
 
-#Title        : var2rd.sh
-#Author       : sambaTux <sambatux@web.de>
-#Start date   : 09.08.2011
-#OS tested    : Ubuntu10.04
-#BASH version : 4.1.5(1)-release
-#Requires     : grep pgrep uniq awk df cp cut cat lsof initctl find rsync mkfs ps killall
-#               basename chmod chown mkdir mount umount
-#Version      : 0.2
-#Script type  : system startup (rc.local)
-#Task(s)      : Create ramdisk for /var at system startup 
+# Title        : var2rd.sh
+# Author       : sambaTux <sambatux@web.de>
+# Start date   : 09.08.2011
+# OS tested    : Ubuntu10.04
+# BASH version : 4.1.5(1)-release
+# Requires     : grep pgrep uniq awk df cp cut cat lsof initctl find rsync mkfs ps killall
+#                basename chmod chown mkdir mount umount
+# Version      : 0.2
+# Script type  : system startup (rc.local)
+# Task(s)      : Create ramdisk for /var at system startup 
 
-#NOTE         : The /varbak/err/err.txt must be delete manually after a failure occured.
-#               SET "ramdisk_size=..." KERNEL PARAMETER in /etc/default/grub before running this script !!
-#               I.e. "ramdisk_size=170000" (~ 170 MB). And dont forget to invoke "update-grub" and "reboot" so
-#               that ramdisk size is active. This config can also be done with "os-config.sh" script.
-#               If you want to mount the root partition in read only mode, don't use this script but use 
-#               /etc/rc.local instead. 
+# NOTE         : - The /varbak/err/err.txt must be delete manually after a failure occured.
+#                - SET "ramdisk_size=..." KERNEL PARAMETER in /etc/default/grub before running this script !!
+#                  I.e. "ramdisk_size=170000" (~ 170 MB). And dont forget to invoke "update-grub" and "reboot" so
+#                  that ramdisk size is active. This config can also be done with "os-config.sh" script.
+#                - If you want to mount the root partition in read only mode, don't use this script but use 
+#                  /etc/rc.local instead. 
+#                - The "error-led.sh" script is started as bg job.
 
-#LICENSE      : Copyright (C) 2011 Robert Schoen
+# LICENSE      : Copyright (C) 2011 Robert Schoen
 
-#               This program is free software: you can redistribute it and/or modify it under the terms 
-#               of the GNU General Public License as published by the Free Software Foundation, either 
-#               version 3 of the License, or (at your option) any later version.
-#               This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-#               without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
-#               See the GNU General Public License for more details. [http://www.gnu.org/licenses/]
+#                This program is free software: you can redistribute it and/or modify it under the terms 
+#                of the GNU General Public License as published by the Free Software Foundation, either 
+#                version 3 of the License, or (at your option) any later version.
+#                This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+#                without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+#                See the GNU General Public License for more details. [http://www.gnu.org/licenses/]
 
 ###################################################################################
 ###################################################################################
@@ -59,7 +60,7 @@ function lastact() {
   fi
 
   # Activate error led
-  "$error_led" &
+  "$error_led" --fatal &
   exit 1
 }
 
@@ -74,7 +75,7 @@ trap 'lastact' TERM INT KILL
 # Are we root?
 [[ $(id -u) -ne 0 ]] && exit 1
 
-# Check if varbak.sh didn't produce any error. If so, this script can be executed, 
+# Check if varbak.sh hasn't produced any error. If so, this script can be executed, 
 # otherwise not.
 errdir="/varbak/err"
 err="${errdir}/err.txt"
@@ -83,7 +84,7 @@ if [[ -e "$err" ]]; then
    echo "ERROR: $err exists! Aborting ..."
  
    # Activate error led
-   "$error_led" &  
+   "$error_led" --fatal &  
    exit 1
 fi
 
@@ -118,8 +119,9 @@ stop_excludes=("`basename "$0"`" "grep" "cut" "uniq" "plymouthd" "rc.local" "ure
 start_excludes=("dhclient3")
 
 lfdir="/media/var2rd"       #mount point for the logfile (tmpfs)
+lfdir2="/media/varbak"      #mount point for the logfile (tmpfs) of "varbak.sh"
 lf="${lfdir}/var2rd.log"    #logfile
-logtmpfs_size="200k"        #size of logfile tmpfs 
+logtmpfs_size="200k"        #size for logfile tmpfs 
 t=`date +%Y.%m.%d-%H:%M:%S` 
 ramdisk="/dev/ram0"
 var="/var"
@@ -132,11 +134,14 @@ rsyncopts2="-rogptl --delete-before --exclude=err --exclude=run --exclude=lock" 
 rsyncopts3="-rogptl --delete-before"                             #sync /var (ramdisk) with /varbak (CF)
 
 
-# Create mount point for the logfile (tmpfs) 
+# Create mount points for the logfile (tmpfs) of "var2rd.sh" and "varbak.sh"
+# Creating it for "varbak.sh" now is usefull when we want to mount / in read only later.
 if [[ ! -d "$lfdir" ]]; then
-   mkdir -m 750 "$lfdir"
+   mkdir -m 700 "$lfdir" 
 fi
-
+if [[ ! -d "$lfdir2" ]]; then
+   mkdir -m 700 "$lfdir2"
+fi
 
 # To keep the logfile of this script while it is running, we need a temporary place
 # until this script has done its job. This is because we are doing a mount round trip. 
