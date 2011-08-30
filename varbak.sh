@@ -427,7 +427,7 @@ if [[ $memused -ge $mempeak ]]; then
    
    # Activate warning led because memused is greater than mempeak
    echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
-   "$error_led" --warning "$lf" &
+   "$error_led" --warning "$lf" & 
 
    # Stop daemons/non-daemons
    pstopper
@@ -443,7 +443,7 @@ elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
     
      # Activate warning led because varsize is greater than maxtmpfssize
      echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
-     "$error_led" --warning "$lf" &
+     "$error_led" --warning "$lf" & 
 
      # Stop daemons/non-daemons
      pstopper
@@ -460,7 +460,7 @@ else
      killall -e -9 `basename $error_led` >>"$lf" 2>&1
      echo "KILLALL: Done." >>"$lf"
      echo "INFO: Calling $error_led with --warn-off parameter ..." >>"$lf"
-     "$error_led" --warn-off "$lf" & 
+     "$error_led" --warn-off "$lf" 
      
      # Mount tmpfs
      echo "MOUNT: Mount tmpfs with size $tmpfssize MB ..." >>"$lf"
