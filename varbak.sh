@@ -64,7 +64,7 @@ function lastact() {
   fi
 
   # Activate error led
-  "$error_led" --fatal &
+  "$error_led" --fatal "$errlf" &
   exit 1
 }
 
@@ -425,7 +425,7 @@ if [[ $memused -ge $mempeak ]]; then
    
    # Activate warning led because memused is greater than mempeak
    echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
-   "$error_led" --warning &
+   "$error_led" --warning "$lf" &
 
    # Stop daemons/non-daemons
    pstopper
@@ -441,7 +441,7 @@ elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
     
      # Activate warning led because varsize is greater than maxtmpfssize
      echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
-     "$error_led" --warning &
+     "$error_led" --warning "$lf" &
 
      # Stop daemons/non-daemons
      pstopper
@@ -458,7 +458,7 @@ else
      killall -e -9 `basename $error_led` >>"$lf" 2>&1
      echo "KILLALL: Done." >>"$lf"
      echo "INFO: Calling $error_led with --warn-off parameter ..." >>"$lf"
-     "$error_led" --warn-off & 
+     "$error_led" --warn-off "$lf" & 
      
      # Mount tmpfs
      echo "MOUNT: Mount tmpfs with size $tmpfssize MB ..." >>"$lf"
