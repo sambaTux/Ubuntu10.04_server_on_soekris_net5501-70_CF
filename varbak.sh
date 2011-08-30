@@ -54,8 +54,10 @@ function lastact() {
   [[ ! -d "$errdir" ]] && mkdir -m 700 "$errdir"
 
   # Create err.txt
-  echo "An error occured!!" >"$err"
-  echo "This file was created by "$0" at "$dt"" >>"$err"
+  echo "A fatal error occured !!!!" >"$err"
+  echo "That means that neither var2rd.sh nor varbak.sh will start again until this file is deleted." >>"$err"
+  echo "This file was created by $0 at $dt" >>"$err"
+  echo "Please investigate ... " >>"$err"  
   chmod 400 "$err"
 
   # Save logfile (or piece of it)
