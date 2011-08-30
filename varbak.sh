@@ -414,8 +414,8 @@ done
 echo "" >>"$lf"
 
 
-# If used memory is greater than memory peak, we will use /varbak on CF/CF as a cache 
-# to sync back data from /var ramdisk to /var on CF/CF. Otherwise we use /varbak 
+# If used memory is greater than memory peak, we will use /varbak on CF as a cache 
+# to sync back data from /var ramdisk to /var on CF. Otherwise we use /varbak 
 # tmpfs to sync back the data.
 
 if [[ $memused -ge $mempeak ]]; then
@@ -424,6 +424,7 @@ if [[ $memused -ge $mempeak ]]; then
    echo "INFO: Using varbak on CF because used RAM greater than configured RAM peak." >>"$lf"
    
    # Activate warning led because memused is greater than mempeak
+   echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
    "$error_led" --warning &
 
    # Stop daemons/non-daemons
@@ -439,6 +440,7 @@ elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
      echo "INFO: Using varbak on CF because we do not have enough free RAM." >>"$lf"
     
      # Activate warning led because varsize is greater than maxtmpfssize
+     echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
      "$error_led" --warning &
 
      # Stop daemons/non-daemons
@@ -448,15 +450,18 @@ elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
      # Start daemons/non-daemons again
      pstarter
 else 
-     #use /varbak on tmpfs because we have enough free RAM
+     # Use /varbak on tmpfs because we have enough free RAM
      echo "INFO: Using varbak on tmpfs because there is enough free RAM." >>"$lf"
 
      # Deactivate warning led because we have enough free RAM.
-     killall -e -9 error-led.sh
+     echo "KILLALL: Killing $error_led ..." >>"$lf"
+     killall -e -9 `basename $error_led` >>"$lf" 2>&1
+     echo "KILLALL: Done." >>"$lf"
+     echo "INFO: Calling $error_led with --warn-off parameter ..." >>"$lf"
      "$error_led" --warn-off & 
-
-     #create tmpfs first
-     echo "MOUNT: Mount tmpfs with size=${tmpfssize} MB ..." >>"$lf"
+     
+     # Mount tmpfs
+     echo "MOUNT: Mount tmpfs with size $tmpfssize MB ..." >>"$lf"
      mount -t tmpfs -o size=${tmpfssize}M tmpfs "$varbak"
      echo "MOUNT: Done." >>"$lf"
 
@@ -467,7 +472,7 @@ else
      # Start daemons/non-daemon again
      pstarter
  
-     #umount tmpfs and free RAM again
+     # Umount tmpfs and free RAM again
      echo "UMOUNT: Unmounting tmpfs ..." >>"$lf"
      umount "$varbak"
      echo "UMOUNT: Done." >>"$lf" 
