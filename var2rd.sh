@@ -11,7 +11,7 @@
 # Script type  : system startup (rc.local)
 # Task(s)      : Create ramdisk for /var at system startup 
 
-# NOTE         : - The /varbak/err/err.txt must be delete manually after a failure occured.
+# NOTE         : - The /varbak/err/err.lock must be delete manually after a failure occured.
 #                - SET "ramdisk_size=..." KERNEL PARAMETER in /etc/default/grub before running this script !!
 #                  I.e. "ramdisk_size=170000" (~ 170 MB). And dont forget to invoke "update-grub" and "reboot" so
 #                  that ramdisk size is active. This config can also be done with "os-config.sh" script.
@@ -40,7 +40,7 @@ function lastact() {
 
   dt=`date +%Y.%m.%d-%H:%M:%S` 
 
-  # Create "err.txt" to publish an error. This mark will also be checked 
+  # Create "err.lock" to publish an error. This mark will also be checked 
   # by the script varbak.sh. If this file exists, varbak.sh and var2rd.sh won't run !!
   errdir="/varbak/err"
   err="${errdir}/err.lock"
@@ -49,7 +49,7 @@ function lastact() {
   # Create error dir if not already done
   [[ -d "$errdir" ]] || mkdir -m 700 "$errdir"
 
-  # Create err.txt
+  # Create err.lock
   echo "A fatal error occured !!!!" >"$err"
   echo "That means that neither var2rd.sh nor varbak.sh will start again until this file is deleted." >>"$err"
   echo "This file was created by $0 at $dt" >>"$err"
@@ -80,7 +80,7 @@ trap 'lastact' TERM INT KILL
 # Check if varbak.sh hasn't produced any error. If so, this script can be executed, 
 # otherwise not.
 errdir="/varbak/err"
-err="${errdir}/err.txt"
+err="${errdir}/err.lock"
 
 if [[ -e "$err" ]]; then
    echo "ERROR: $err exists! Aborting ..."
