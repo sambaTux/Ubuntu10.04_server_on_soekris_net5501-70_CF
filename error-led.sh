@@ -26,8 +26,6 @@
 dev="/dev/error_led"
 # Define logfile. Use the same as the calling script.
 lf="$2" 
-# Define calling script
-parent="$3"
 
 
 # Prepare everything for the error led usage. "--prepare" is only used by "var2rd.sh".
@@ -46,7 +44,7 @@ case "$1" in
         major=$(cat /proc/devices | grep "cs5535_gpio$" | cut -d ' ' -f 1)
         minor=6
 
-        # Create nod
+        # Create node
         echo "MKNOD: Creating $dev ..." >>"$lf"
         if [[ -e "$dev" ]]; then
            rm -f "$dev"
@@ -65,7 +63,7 @@ case "$1" in
         # 4 5 10 11 16 17 18 19 20 21 22 23 and 254
         minor=254
 
-        # Create gpio nod
+        # Create gpio node
         echo "MKNOD: Creating $gpiodev ..." >>"$lf"
         if [[ -e "$gpiodev" ]]; then
            rm -f "$gpiodev"
@@ -80,13 +78,18 @@ case "$1" in
 
 
    "--fatal")    # A script failed/crashed
-                 echo "FATAL: Activating non-blinking error led. " >>"$lf"
-                 echo 1 >"$dev"    
+                 [[ -n "$2" ]] && echo "FATAL ERROR: Activating fast blinking error led ..." >>"$lf"
+                 while true; do
+                   echo 1 >"$dev"
+                   sleep 0.3
+                   echo 0 >"$dev"
+                   sleep 0.3
+                 done                           
    ;;
 
-   "--warning")  # A script doesn't run in optimal modus. 
+   "--warning")  # A script doesn't run optimal.
                  # I.e. when not enough free RAM available for "varbak.sh" to sync. data.
-                 echo "WARN: Activating blinking error led. Not enough free RAM for data sync." >>"$lf"
+                 echo "WARN: Activating slow blinking error led. Not enough free RAM for data sync." >>"$lf"
                  while true; do
                    echo 1 >"$dev"
                    sleep 1
@@ -96,7 +99,7 @@ case "$1" in
    ;; 
    
    "--warn-off") # Deactivate warning led. I.e when "varbak.sh" has enough free RAM again.
-                 echo "INFO: Deactivating blinking error led ..." >>"$lf"
+                 echo "INFO: Deactivating slow blinking error led ..." >>"$lf"
                  echo 0 >"$dev"
    ;;                 
 esac
