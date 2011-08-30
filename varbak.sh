@@ -79,7 +79,7 @@ trap 'lastact' TERM KILL INT
 # Are we root?
 [[ $(id -u) -ne 0 ]] && echo "ERROR: Must be root!" && exit 1
 
-# Check if var2rd.sh didn't produce any error. If so, this script can be executed, 
+# Check if var2rd.sh hasn't produce any error. If so, this script can be executed, 
 # otherwise not.
 errdir="/varbak/err"
 err="${errdir}/err.txt"
@@ -142,9 +142,10 @@ rsyncopts="-rogptl --delete-before"                   #options for rsync cmd
 ramdisk="/dev/ram0"
 
 
-# Create mount point for the logfile (tmpfs) 
+# Check if "var2rd.sh" has created the mount point for the logfile (tmpfs).
+# If not try to create it. Hopefully /media is not mounted in read only. 
 if [[ ! -d "$lfdir" ]]; then 
-   mkdir -m 750 "$lfdir"
+   [[ ! `mkdir -m 700 "$lfdir"` ]] && exit 1
 fi
 
 
