@@ -79,7 +79,7 @@ trap 'lastact' TERM KILL INT
 # Are we root?
 [[ $(id -u) -ne 0 ]] && echo "ERROR: Must be root!" && exit 1
 
-# Check if var2rd.sh hasn't produce any error. If so, this script can be executed, 
+# Check if var2rd.sh hasn't produced any error. If so, this script can be executed, 
 # otherwise not.
 errdir="/varbak/err"
 err="${errdir}/err.txt"
