@@ -43,7 +43,7 @@ function lastact() {
   # Create "err.txt" to publish an error. This mark will also be checked 
   # by the script varbak.sh. If this file exists, varbak.sh and var2rd.sh won't run !!
   errdir="/varbak/err"
-  err="${errdir}/err.txt"
+  err="${errdir}/err.lock"
   errlf="${errdir}/var2rd-error.log"
    
   # Create error dir if not already done
