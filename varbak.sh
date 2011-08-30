@@ -1,26 +1,27 @@
 #!/bin/bash
 
-#Title        : varbak.sh
-#Author       : sambaTux <sambatux@web.de>
-#Start date   : 09.08.2011
-#OS tested    : ubuntu10.04
-#BASH version : 4.1.5(1)-release
-#Requires     : grep pgrep free expr du uniq awk sed cut cat lsof touch
-#               initctl find rsync ps killall mount umount chmod mkdir 
-#Version      : 0.2
-#Script type  : cronjob
-#Task(s)      : copy files from /var ramdisk to /var on CompactFlash (CF).  
+# Title        : varbak.sh
+# Author       : sambaTux <sambatux@web.de>
+# Start date   : 09.08.2011
+# OS tested    : ubuntu10.04
+# BASH version : 4.1.5(1)-release
+# Requires     : grep pgrep free expr du uniq awk sed cut cat lsof touch
+#                initctl find rsync ps killall mount umount chmod mkdir 
+# Version      : 0.2
+# Script type  : cronjob, shutdown
+# Task(s)      : copy files from /var ramdisk to /var on CompactFlash (CF).  
 
-#NOTE         : the /varbak/err/err.txt must be delete manually after a failure occured.
+# NOTE         : - The /varbak/err/err.txt must be delete manually after a failure occured.
+#                - The "error-led.sh" script is started as bg job.
 
-#LICENSE      : Copyright (C) 2011 Robert Schoen
+# LICENSE      : Copyright (C) 2011 Robert Schoen
 
-#               This program is free software: you can redistribute it and/or modify it under the terms 
-#               of the GNU General Public License as published by the Free Software Foundation, either 
-#               version 3 of the License, or (at your option) any later version.
-#               This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-#               without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
-#               See the GNU General Public License for more details. [http://www.gnu.org/licenses/]
+#                This program is free software: you can redistribute it and/or modify it under the terms 
+#                of the GNU General Public License as published by the Free Software Foundation, either 
+#                version 3 of the License, or (at your option) any later version.
+#                This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+#                without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+#                See the GNU General Public License for more details. [http://www.gnu.org/licenses/]
 
 
 ###################################################################################
@@ -63,7 +64,7 @@ function lastact() {
   fi
 
   # Activate error led
-  "$error_led" &
+  "$error_led" --fatal &
   exit 1
 }
 
@@ -87,7 +88,7 @@ if [[ -e "$err" ]]; then
    echo "ERROR: $err exists! Aborting ..."
 
    # Activate error led
-   "$error_led" &
+   "$error_led" --fatal &
    exit 1
 fi
 
@@ -125,21 +126,21 @@ start_excludes=("dhclient3" "dhclient")
 # NOTE: sizes are in MB.
 lfdir="/media/varbak"         #mount point for logfile
 lf="${lfdir}/varbak.log"      #logfile
+logtmpfs_size="200k"          #size for logfile tmpfs
 t=`date +%Y.%m.%d-%H:%M:%S`
 var="/var"
 varbak="/varbak"
-memtotal=`free -m | grep '^Mem:' | awk -F ' ' '{ print $2 }'`    
-memused=`free -m | grep '^Mem:' | awk -F ' ' '{ print $3 }'`
-memdiff=`expr $memtotal - $memused`
-mempeak=`expr $memtotal / 4 \* 3`
-#mempeak='3'   #good for testing purposes. varbak.sh will always use /varbak on hdd/CF/CF
-varsize=`du -sh "$var" | awk -F ' ' '{ print $1 }' | sed 's/.$//'`
-tmpfssize=`expr $varsize + 35`   
-ramdisk="/dev/ram0"
-maxtmpfssize="170"                   
-rdmountopts="-o rw,nosuid,nodev,nouser"               #options for mount cmd to mount ramdisk
-rdmountfstype="-t ext2"                               #option for mount cmd to mount ramdisk
+memtotal=`free -m | grep '^Mem:' | awk -F ' ' '{ print $2 }'`      #total system RAM
+memused=`free -m | grep '^Mem:' | awk -F ' ' '{ print $3 }'`       #RAM currently used by OS
+memdiff=`expr $memtotal - $memused`                              
+mempeak=`expr $memtotal / 4 \* 3`                                  #set RAM threshold
+varsize=`du -sh "$var" | awk -F ' ' '{ print $1 }' | sed 's/.$//'` #current size of /var (CF)
+tmpfssize=`expr $varsize + 10`                                     #set tmpfs size used for data sync. 
+maxtmpfssize="170"                                    #max. size of tmpfs for data sync.
+rdmountopts="-t ext2 -o rw,nosuid,nodev,nouser"       #ramdisk mount options
 rsyncopts="-rogptl --delete-before"                   #options for rsync cmd
+ramdisk="/dev/ram0"
+
 
 # Create mount point for the logfile (tmpfs) 
 if [[ ! -d "$lfdir" ]]; then 
@@ -150,7 +151,7 @@ fi
 # To keep the logfile of this script while its running, we need a temporary place
 # until this script has done its job. This is because we are doing a mount round trip. 
 # Hence we will mount a tmpfs somewhere to keep the logfile for a while.
-mount -t tmpfs -o rw,size=1M,mode=600 tmpfs "$lfdir"
+mount -t tmpfs -o rw,size="$logtmpfs_size",mode=600 tmpfs "$lfdir"
 
 
 # Create logfile if not already done
@@ -300,7 +301,7 @@ function pstopper() {
 
 }
 
-# This function writes data from /var (ramdisk) back to /var on hdd/CF
+# This function writes data from /var (ramdisk) back to /var on CF
 function syncer() {
 
   # Delete all regular files in /var/cache, but keep dir. struct. 
@@ -309,8 +310,8 @@ function syncer() {
   find /var/cache/ -type f -exec rm -r '{}' \; >/dev/null 2>>"$lf"
   echo "FIND: Done." >>"$lf"
 
-  # Sync /varbak (tmpfs/hdd/CF) with /var (ramdisk)
-  echo "RSYNC: Start sync $varbak (tmpfs/hdd/CF) with $var (ramdisk)"  >>"$lf" 2>&1
+  # Sync /varbak (tmpfs/CF) with /var (ramdisk)
+  echo "RSYNC: Start sync $varbak (tmpfs/CF) with $var (ramdisk)"  >>"$lf" 2>&1
   rsync $rsyncopts "${var}/" "${varbak}/" 2>> "$lf"
   echo "RSYNC: Done." >>"$lf"
 
@@ -319,14 +320,14 @@ function syncer() {
   umount "$ramdisk" >>"$lf" 2>&1 
   echo "UMOUNT: Done." >>"$lf"
 
-  # Sync /var (hdd/CF) with /varbak (tmpfs/hdd/CF)
-  echo "RSYNC: Start sync $var (hdd/CF) with $varbak (tmpfs/hdd/CF)" >>"$lf"
+  # Sync /var (CF) with /varbak (tmpfs/CF)
+  echo "RSYNC: Start sync $var (CF) with $varbak (tmpfs/CF)" >>"$lf"
   rsync $rsyncopts "${varbak}/" "${var}/" 2>>"$lf"
   echo "RSYNC: Done." >>"$lf"
 
   # Mount /var (ramdisk) again
-  echo "MOUNT: Mounting $var (ramdisk)" >>"$lf"
-  mount $rdmountfstype $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
+  echo "MOUNT: Mounting ramdisk on $var (CF)" >>"$lf"
+  mount $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
   echo "MOUNT: Done." >>"$lf"
 
 }
@@ -412,16 +413,19 @@ done
 echo "" >>"$lf"
 
 
-# If used memory is greater than memory peak, we will use /varbak on hdd/CF/CF as a cache 
-# to sync back data from /var ramdisk to /var on hdd/CF/CF. Otherwise we use /varbak 
+# If used memory is greater than memory peak, we will use /varbak on CF/CF as a cache 
+# to sync back data from /var ramdisk to /var on CF/CF. Otherwise we use /varbak 
 # tmpfs to sync back the data.
 
 if [[ $memused -ge $mempeak ]]; then
 
-   # Sync data by using /varbak on hdd/CF
-   echo "INFO: Using varbak on hdd/CF because used RAM > configured RAM peak." >>"$lf"
+   # Sync data by using /varbak on CF
+   echo "INFO: Using varbak on CF because used RAM greater than configured RAM peak." >>"$lf"
    
-   # Stop daemons/non-dameons
+   # Activate warning led because memused is greater than mempeak
+   "$error_led" --warning &
+
+   # Stop daemons/non-daemons
    pstopper
    # Sync data
    syncer   
@@ -430,8 +434,11 @@ if [[ $memused -ge $mempeak ]]; then
    
 elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
 
-     # Use /varbak on hdd/CF because we dont want to accupy to much RAM.
-     echo "INFO: Using varbak on hdd/CF because we do not have enough free RAM." >>"$lf"
+     # Use /varbak on CF because we dont want to accupy to much RAM.
+     echo "INFO: Using varbak on CF because we do not have enough free RAM." >>"$lf"
+    
+     # Activate warning led because varsize is greater than maxtmpfssize
+     "$error_led" --warning &
 
      # Stop daemons/non-daemons
      pstopper
@@ -442,6 +449,10 @@ elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
 else 
      #use /varbak on tmpfs because we have enough free RAM
      echo "INFO: Using varbak on tmpfs because there is enough free RAM." >>"$lf"
+
+     # Deactivate warning led because we have enough free RAM.
+     killall -e -9 error-led.sh
+     "$error_led" --warn-off & 
 
      #create tmpfs first
      echo "MOUNT: Mount tmpfs with size=${tmpfssize} MB ..." >>"$lf"
@@ -463,7 +474,7 @@ fi
  
 
 # Copy logfile from tmpfs to /var (ramdisk)
-# Note this logfile will be saved to hdd/CF (/var) only the next time 
+# Note this logfile will be saved to CF (/var) only the next time 
 # this script runs.
 echo "CAT: Append "$lf" (tmpfs) to ${var}/log/varbak.log (ramdisk)" >>"$lf"
 cat "$lf" >>"${var}/log/varbak.log"
