@@ -6,7 +6,7 @@
 # OS tested    : Ubuntu10.04
 # BASH version : 4.1.5(1)-release
 # Requires     : grep pgrep uniq awk df cp cut cat lsof initctl find rsync mkfs ps killall
-#                basename chmod chown mkdir mount umount
+#                basename chmod chown mkdir mount umount tune2fs touch 
 # Version      : 0.2
 # Script type  : system startup (rc.local)
 # Task(s)      : Create ramdisk for /var at system startup 
@@ -138,9 +138,10 @@ t=`date +%Y.%m.%d-%H:%M:%S`
 ramdisk="/dev/ram0"
 var="/var"
 varbak="/varbak"
-rdfstype="-t ext2"                                    #option for mkfs AND mount.
-rdmountopts="-o rw,nosuid,nodev,nouser"               #ramdisk mount options
-rdlabel="varrd"                                       #ramdisk label
+rdfstype="-t ext2"                         #option for mkfs AND mount.
+rdmountopts="-o rw,nosuid,nodev,nouser"    #ramdisk mount options
+rdlabel="varrd"                            #ramdisk label
+rdfsck="off"                           #turn on/off fsck for /var ramdisk. Options are: "on" and "off"
 tmpfsmountopts="-o rw,nosuid,nodev,nouser,size=150m"  #tmpfs mount options
 rsyncopts1="-rogptl --delete-before"                             #sync /varbak/{run,lock} (CF) with /var/{run,lock} (tmpfs)
 rsyncopts2="-rogptl --delete-before --exclude=err --exclude=run --exclude=lock"    #sync /varbak/ (CF) with /var/ (CF)
@@ -383,11 +384,18 @@ rsync $rsyncopts2 "${var}/" "${varbak}/" >>"$lf" 2>&1
 echo "RSYNC: Done." >>"$lf"
 
  
-# If we use ramdisk, format it
+# If we use ramdisk, format it and turn of fsck if wanted.
 if [[ "$rdORtmpfs" = "rd" ]]; then
    echo "MKFS: Formating ramdisk ..." >>"$lf"
    mkfs $rdfstype -m 0 -L "$rdlabel" "$ramdisk" >>"$lf" 2>&1 
    echo "MKFS: Done." >>"$lf"
+   
+   if [[ "$rdfsck" = "off" ]]; then
+      # Turn off counter and time based fsck for /var (ramdisk)
+      echo "TUNE2FS: Turning off counter and time based fsck for "$var" (ramdisk)..." >>"$lf"
+      tune2fs -c 0 -i 0 "$ramdisk" >>"$lf" 2>&1
+      echo "TUNE2FS: Done." >>"$lf"
+   fi
 fi
 
 
