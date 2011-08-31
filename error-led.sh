@@ -45,14 +45,11 @@ case "$1" in
         minor=6
 
         # Create node
-        echo "MKNOD: Creating $dev ..." >>"$lf"
-        if [[ -e "$dev" ]]; then
-           rm -f "$dev"
+        if [[ ! -e "$dev" ]]; then
+           echo "MKNOD: Creating $dev ..." >>"$lf"
            mknod "$dev" c $major $minor >>"$lf" 2>&1
-        else
-           mknod "$dev" c $major $minor >>"$lf" 2>&1
+           echo "MKNOD: Done." >>"$lf"        
         fi
-        echo "MKNOD: Done." >>"$lf"        
 
         # GPIO (General Purpose Input Output)
         gpiodev="/dev/gpio"
@@ -64,15 +61,11 @@ case "$1" in
         minor=254
 
         # Create gpio node
-        echo "MKNOD: Creating $gpiodev ..." >>"$lf"
-        if [[ -e "$gpiodev" ]]; then
-           rm -f "$gpiodev"
+        if [[ ! -e "$gpiodev" ]]; then
+           echo "MKNOD: Creating $gpiodev ..." >>"$lf"
            mknod "$gpiodev" c $major $minor >>"$lf" 2>&1
-        else
-           mknod "$gpiodev" c $major $minor >>"$lf" 2>&1
-        fi   
-        echo "MKNOD: Done." >>"$lf"
-        
+           echo "MKNOD: Done." >>"$lf"
+        fi    
         echo "TASK: Done." >>"$lf"
    ;;
 
