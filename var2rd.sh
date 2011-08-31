@@ -6,8 +6,8 @@
 # OS tested    : Ubuntu10.04
 # BASH version : 4.1.5(1)-release
 # Requires     : grep pgrep uniq awk df cp cut cat lsof initctl find rsync mkfs ps killall
-#                basename chmod chown mkdir mount umount tune2fs touch 
-# Version      : 0.2
+#                basename chmod chown mkdir mount umount tune2fs touch rdev 
+# Version      : 0.3
 # Script type  : system startup (rc.local)
 # Task(s)      : Create ramdisk for /var at system startup 
 
@@ -123,7 +123,7 @@ declare -A stop_list
 stop_excludes=("`basename "$0"`" "grep" "cut" "uniq" "plymouthd" "rc.local" "ssh")
 start_excludes=("dhclient3")
 
-# Use ramdisk or tmpfs for /var. Options are: "rd" or "tmpfs".
+# Use ramdisk or tmpfs for /var. Options are: "rd" and "tmpfs".
 # tmpfs:   - Pro:    RAM size grows/shrinks dynamically.
 #          - Contra: tmpfs uses swap partition if necessary, even with swappiness = 0.
 # ramdisk: - Pro:    Never uses swap partition. 
@@ -138,10 +138,11 @@ t=`date +%Y.%m.%d-%H:%M:%S`
 ramdisk="/dev/ram0"
 var="/var"
 varbak="/varbak"
-rdfstype="-t ext2"                         #option for mkfs AND mount.
+rdfstype="-t ext2"                         #option for mkfs AND mount for ramdisk (rd)
 rdmountopts="-o rw,nosuid,nodev,nouser"    #ramdisk mount options
 rdlabel="varrd"                            #ramdisk label
-rdfsck="off"                           #turn on/off fsck for /var ramdisk. Options are: "on" and "off"
+rdfsck="off"                               #turn on/off /var (ramdisk) fsck. Options are: "on" and "off"
+rootfsck="off"                             #turn on/off / fsck. Options are: "on" and "off"
 tmpfsmountopts="-o rw,nosuid,nodev,nouser,size=150m"  #tmpfs mount options
 rsyncopts1="-rogptl --delete-before"                             #sync /varbak/{run,lock} (CF) with /var/{run,lock} (tmpfs)
 rsyncopts2="-rogptl --delete-before --exclude=err --exclude=run --exclude=lock"    #sync /varbak/ (CF) with /var/ (CF)
@@ -474,6 +475,15 @@ echo "UMOUNT: Done." >>"$lf"
 # still writable. "error-led.sh" uses the same logfile as this script does.
 echo "INFO: Calling $error_led ..." >>"$lf"
 "$error_led" --prepare "$lf"
+
+
+# Turn off / fsck
+if [[ "$rootfsck" = "off" ]]; then
+   rootdev=`rdev | cut -d ' ' -f 1` 
+   echo "TUNE2FS: Turning off counter and time based fsck for "$rootdev" ..." >>"$lf"
+   tune2fs -c 0 -i 0 "$rootdev" >>"$lf" 2>&1
+   echo "TUNE2FS: Done." >>"$lf"
+fi
 
 
 # Insert end flag into logfile
