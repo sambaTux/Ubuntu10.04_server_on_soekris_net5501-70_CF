@@ -109,7 +109,7 @@ fi
 #                 and type (upstart / initV / non-daemon) of a process.
 #                 This array is filled automatically!
 # stop_excludes   Array of processes that should NOT be stopped. 
-#                 I.e ssh during system startup.
+#                 I.e ssh during system startup or this script itself.
 #                 This array must be filled manually.
 # start_excludes  Array of processes that we don't want to start again after stopping them. 
 #                 I.e. dhclient3. Usefull when we mount the root fs in read only.
@@ -123,17 +123,25 @@ declare -A stop_list
 stop_excludes=("`basename "$0"`" "grep" "cut" "uniq" "plymouthd" "rc.local" "ssh")
 start_excludes=("dhclient3")
 
+# Use ramdisk or tmpfs for /var. Options are: "rd" OR "tmpfs".
+# tmpfs:   - Pro:    RAM size grows/shrinks dynamically.
+#          - Contra: tmpfs uses swap partition if necessary, even with swappiness = 0.
+# ramdisk: - Pro:    Never uses swap partition. 
+#          - Contra: RAM size is static.
+rdORtmpfs="rd"             
+
 lfdir="/media/var2rd"       #mount point for the logfile (tmpfs)
 lfdir2="/media/varbak"      #mount point for the logfile (tmpfs) of "varbak.sh"
 lf="${lfdir}/var2rd.log"    #logfile
-logtmpfs_size="200k"        #size for logfile tmpfs 
+logtmpfsmountopts="-o rw,nosuid,nodev,nouser,noexec,size=200k,mode=600" #logfile tmpfs mount options
 t=`date +%Y.%m.%d-%H:%M:%S` 
 ramdisk="/dev/ram0"
 var="/var"
 varbak="/varbak"
 rdfstype="-t ext2"                                    #option for mkfs AND mount.
-rdmountopts="-o rw,nosuid,nodev,nouser"               #options for mount cmd to mount ramdisk
+rdmountopts="-o rw,nosuid,nodev,nouser"               #ramdisk mount options
 rdlabel="varrd"                                       #ramdisk label
+tmpfsmountopts="-o rw,nosuid,nodev,nouser,size=150m"  #tmpfs mount options
 rsyncopts1="-rogptl --delete-before"                             #sync /varbak/{run,lock} (CF) with /var/{run,lock} (tmpfs)
 rsyncopts2="-rogptl --delete-before --exclude=err --exclude=run --exclude=lock"    #sync /varbak/ (CF) with /var/ (CF)
 rsyncopts3="-rogptl --delete-before"                             #sync /var (ramdisk) with /varbak (CF)
@@ -157,7 +165,7 @@ fi
 # until this script has done its job. This is because we are doing a mount round trip. 
 # Hence we will mount a tmpfs somewhere to keep the logfile for a while.
 echo "MOUNT: Mounting tmpfs for logfile ..."
-mount -t tmpfs -o rw,size="$logtmpfs_size",mode=600 tmpfs "$lfdir"
+mount -t tmpfs $logtmpfsmountopts tmpfs "$lfdir"
 echo "MOUNT: Done."
 
 
@@ -362,6 +370,7 @@ echo "RSYNC: Done." >>"$lf"
 
 
 # Unmount /var/lock and /var/run
+# NOTE: /var/run & /var/lock use tmpfs by default. We use ramdisk with ext2 or tmpfs.
 echo "UMOUNT: Unmounting /var/lock and /var/run ..." >>"$lf"
 umount "${var}/lock" >>"$lf" 2>&1
 umount "${var}/run" >>"$lf" 2>&1
@@ -374,21 +383,31 @@ rsync $rsyncopts2 "${var}/" "${varbak}/" >>"$lf" 2>&1
 echo "RSYNC: Done." >>"$lf"
 
  
-# Format ramdisk 
-echo "MKFS: Formating ramdisk ..." >>"$lf"
-mkfs $rdfstype -m 0 -L "$rdlabel" "$ramdisk" >>"$lf" 2>&1 
-echo "MKFS: Done." >>"$lf"
+# If we use ramdisk, format it
+if [[ "$rdORtmpfs" = "rd" ]]; then
+   echo "MKFS: Formating ramdisk ..." >>"$lf"
+   mkfs $rdfstype -m 0 -L "$rdlabel" "$ramdisk" >>"$lf" 2>&1 
+   echo "MKFS: Done." >>"$lf"
+fi
 
 
-# Mount /var.
-# NOTE: /var/run & /var/lock use tmpfs by default. We use ramdisk with ext2 instead.
-echo "MOUNT: Mounting ramdisk on $var" >>"$lf"
-mount $rdfstype $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
-echo "MOUNT: Done." >>"$lf"
+# Mount ramdisk or tmpfs on /var.
+if [[ "$rdORtmpfs" = "rd" ]]; then
+   echo "MOUNT: Mounting ramdisk on $var" >>"$lf"
+   mount $rdfstype $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
+   echo "MOUNT: Done." >>"$lf"
 
+elif [[ "$rdORtmpfs" = "tmpfs" ]]; then
+     echo "MOUNT: Mounting tmpfs on $var" >>"$lf"
+     mount -t tmpfs $tmpfsmountopts tmpfs "$var" >>"$lf" 2>&1
+     echo "MOUNT: Done." >>"$lf"
+     echo "SWAP: Setting swappiness to 0 ..." >>"$lf"
+     echo 0 >/proc/sys/vm/swappiness
+     echo "SWAP: Done." >>
+fi
 
-# Sync /var (ramdisk) with /varbak (CF)
-echo "RSYNC: Start syncing $var (ramdisk) with $varbak (CF)" >>"$lf"
+# Sync /var (ramdisk/tmpfs) with /varbak (CF)
+echo "RSYNC: Start syncing $var (ramdisk/tmpfs) with $varbak (CF)" >>"$lf"
 rsync $rsyncopts3 "${varbak}/" "${var}/" >>"$lf" 2>&1
 echo "RSYNC: Done." >>"$lf"
 
