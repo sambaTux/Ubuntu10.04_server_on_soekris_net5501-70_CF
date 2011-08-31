@@ -123,12 +123,12 @@ declare -A stop_list
 stop_excludes=("`basename "$0"`" "grep" "cut" "uniq" "plymouthd" "rc.local" "ssh")
 start_excludes=("dhclient3")
 
-# Use ramdisk or tmpfs for /var. Options are: "rd" OR "tmpfs".
+# Use ramdisk or tmpfs for /var. Options are: "rd" or "tmpfs".
 # tmpfs:   - Pro:    RAM size grows/shrinks dynamically.
 #          - Contra: tmpfs uses swap partition if necessary, even with swappiness = 0.
 # ramdisk: - Pro:    Never uses swap partition. 
 #          - Contra: RAM size is static.
-rdORtmpfs="rd"             
+rdORtmpfs="tmpfs"             
 
 lfdir="/media/var2rd"       #mount point for the logfile (tmpfs)
 lfdir2="/media/varbak"      #mount point for the logfile (tmpfs) of "varbak.sh"
@@ -403,7 +403,7 @@ elif [[ "$rdORtmpfs" = "tmpfs" ]]; then
      echo "MOUNT: Done." >>"$lf"
      echo "SWAP: Setting swappiness to 0 ..." >>"$lf"
      echo 0 >/proc/sys/vm/swappiness
-     echo "SWAP: Done." >>
+     echo "SWAP: Done." >>"$lf"
 fi
 
 # Sync /var (ramdisk/tmpfs) with /varbak (CF)
