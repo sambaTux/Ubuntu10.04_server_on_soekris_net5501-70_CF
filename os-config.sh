@@ -36,12 +36,4 @@ if [[ -f "$sources" ]]; then
    && apt-get update
 fi
 
-# Set swappiness to 0 (def. = 60). 0 means that the kernel should preferably not use the swapp partition.
-sysctl="/etc/sysctl.conf"
-if [[ -f "$sysctl" ]]; then
-   echo "" >>"$sysctl"
-   echo "# Set swappiness to 0, meaning that the swapp partition should preferably not be used by the kernel" >>"$sysctl"
-   echo "vm.swappiness=0" >>"$sysctl"
-fi
-
 exit 0
