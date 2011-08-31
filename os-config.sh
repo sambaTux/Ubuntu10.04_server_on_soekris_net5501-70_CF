@@ -24,10 +24,6 @@ if [[ -f "$grub_conf" ]]; then
    && update-grub
 fi
 
-# Turn off counter based fsck for root dev
-rootdev=`rdev | cut -d ' ' -f 1`
-tune2fs -c -1 "$rootdev"
-
 # Deactivate  "multiverse" and "universe" repos in order to save ~60MB in /var/lib/apt/lists/
 sources="/etc/apt/sources.list"
 if [[ -f "$sources" ]]; then
