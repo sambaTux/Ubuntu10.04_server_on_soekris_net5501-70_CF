@@ -43,42 +43,48 @@ c) Brief overview about the tasks that these scripts accomplish
 os-config.sh
 
    - set kernel parameters
-   - turn off fsck for root partition
    - deactivate  "multiverse" and "universe" repos to save ~60MB in /var/lib/apt/lists/
-   - set swappiness to 0 (def. = 60)
 
 var2rd.sh
 
    - check for errors (/var/err), else activate error LED and quit
-   - create tmpfs for logfile 
+   - create logfile mount points for varbak.sh and itself
+   - mount logfile tmpfs
+   - create logfile
    - check if /var and /varbak are partitions
    - get list of processes which are accessing /var
    - stop/kill those proccesses
    - clean /var/cache
+   - create /varbak/{run,lock}
    - sync /varbak/{run,lock} (CF) with /var/{run,lock} (tmpfs)
    - unmount /var/{run,lock} (tmpfs)
    - sync /varbak (CF) with /var (CF)
-   - format ramdisk /dev/ram0
-   - mount ramdisk on /var
-   - sync /var (ramdisk) with /varbak (CF)
+   - if ramdisk /dev/ram0 is used, format it and turn its fsck on/off
+   - mount ramdisk/tmpfs on /var
+   - sync /var (ramdisk/tmpfs) with /varbak (CF)
    - start processess again
+   - save tmpfs logfile to /var/log/var2rd.log
    - unmount logfile tmpfs
+   - call error_led.sh to create error_led and gpio node
+   - turn on/off / fsck
 
 varbak.sh
 
    - check for errors (/var/err), else activate error LED and quit
-   - create tmpfs for logfile 
-   - check if /dev/ram0 is mounted
+   - check if tmpfs logfile mount point exists
+   - mount logfile tmpfs  
+   - create logfile
+   - check if /dev/ram0 or tmpfs is mounted on /var
    - check if /var and /varbak are partitions
    - get list of processes which are accessing /var
    - stop/kill those proccesses
-   - if enough free RAM, use another tmpfs to sync data between /var (ramdisk) and /varbak (tmpfs)
+   - if enough free RAM, use a tmpfs to sync data between /var (ramdisk/tmpfs) and /varbak (tmpfs)
      if not enough free RAM, use /varbak (CF) to sync data
    - clean /var/cache
-   - sync /varbak (CF/tmpfs) with /var (ramdisk)
-   - unmount /var (ramdisk)
+   - sync /varbak (CF/tmpfs) with /var (ramdisk/tmpfs)
+   - unmount /var (ramdisk/tmpfs)
    - sync /var (CF) with /varbak (CF/tmpfs)
-   - mount ramdisk on /var
+   - mount ramdisk/tmpfs on /var 
    - start processess again
    - unmount logfile tmpfs
 
@@ -87,7 +93,7 @@ error-led.sh
    - load GPIO kernel modules
    - create error LED nod
    - create GPIO nod
-   - activate error LED
+   - de-/activate error LED
 
 
 
