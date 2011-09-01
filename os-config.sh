@@ -5,7 +5,7 @@
 # Start date   : 09.08.2011
 # OS tested    : Ubuntu10.04
 # BASH version : 4.1.5(1)-release
-# Requires     : cp, sed, update-grub, tune2fs, apt-get update, mkdir
+# Requires     : cp, sed, update-grub, apt-get update
 # Version      : 0.1
 # Task(s)      : configure OS to run on Compact Flash
 
@@ -24,12 +24,12 @@ if [[ -f "$grub_conf" ]]; then
    && update-grub
 fi
 
-# Deactivate  "multiverse" and "universe" repos in order to save ~60MB in /var/lib/apt/lists/
+# Deactivate "multiverse" and "universe" repos in order to save ~60MB in /var/lib/apt/lists/
 sources="/etc/apt/sources.list"
 if [[ -f "$sources" ]]; then
    cp -p "$sources" ${sources}.bak
    sed -i 's/^deb.*\(universe\|multiverse\)$/#&/' "$sources" \
-   && apt-get update
+   && apt-get update 
 fi
 
 exit 0
