@@ -7,9 +7,9 @@
 # BASH version : 4.1.5(1)-release
 # Requires     : grep pgrep free expr du uniq awk sed cut cat lsof touch
 #                initctl find rsync ps killall mount umount chmod mkdir 
-# Version      : 0.2
+# Version      : 0.3
 # Script type  : cronjob, shutdown
-# Task(s)      : copy files from /var ramdisk to /var on CompactFlash (CF).  
+# Task(s)      : copy files from /var ramdisk/tmpfs to /var on CompactFlash (CF).  
 
 # NOTE         : - The /varbak/err/err.lock must be delete manually after a failure occured.
 #                - The "error-led.sh" script is started as bg job.
@@ -129,6 +129,7 @@ start_excludes=("dhclient3" "dhclient")
 lfdir="/media/varbak"         #mount point for logfile
 lf="${lfdir}/varbak.log"      #logfile
 logtmpfs_size="200k"          #size for logfile tmpfs
+logtmpfsmountopts="-o rw,nosuid,nodev,nouser,noexec,size=200k,mode=600" #logfile tmpfs mount options
 t=`date +%Y.%m.%d-%H:%M:%S`
 var="/var"
 varbak="/varbak"
@@ -137,24 +138,31 @@ memused=`free -m | grep '^Mem:' | awk -F ' ' '{ print $3 }'`       #RAM currentl
 memdiff=`expr $memtotal - $memused`                              
 mempeak=`expr $memtotal / 4 \* 3`                                  #set RAM threshold
 varsize=`du -sh "$var" | awk -F ' ' '{ print $1 }' | sed 's/.$//'` #current size of /var (CF)
-tmpfssize=`expr $varsize + 10`                                     #set tmpfs size used for data sync. 
-maxtmpfssize="170"                                    #max. size of tmpfs for data sync.
-rdmountopts="-t ext2 -o rw,nosuid,nodev,nouser"       #ramdisk mount options
-rsyncopts="-rogptl --delete-before"                   #options for rsync cmd
-ramdisk="/dev/ram0"
+tmpfssize=`expr $varsize + 10`                                     #set tmpfs size used for data sync.
+tmpfssize="${tmpfssize}m"                                          #set tmpfs size in MB.
+maxtmpfssize="170"                                                 #max. size of tmpfs for data sync.
+ramdisk=`cat /proc/mounts | grep "/dev/ram." | cut -d ' ' -f 1`    #get ramdisk
+rdfstype=`cat /proc/mounts | grep "/dev/ram." | awk -F ' ' '{ print $3 }'`                #get ramdisk fs type
+rdmountopts=`cat /proc/mounts | grep "/dev/ram." | awk -F ' ' '{ print $(NF-2) }'`        #get ramdisk mount options
+rdmountopts="-t $rdfstype -o $rdmountopts"                                                #build mount options string
+tmpfsmountopts=`cat /proc/mounts | grep "^tmpfs $var " | awk -F ' ' '{ print $(NF-2) }'`  #get /var (tmpfs) mount options
+rsyncopts="-rogptl --delete-before"                                                       #options for rsync cmd
 
 
 # Check if "var2rd.sh" has created the mount point for the logfile (tmpfs).
 # If not try to create it. Hopefully /media is not mounted in read only. 
 if [[ ! -d "$lfdir" ]]; then 
-   [[ ! `mkdir -m 700 "$lfdir"` ]] && exit 1
+   if [[ ! `mkdir -m 700 "$lfdir"` ]]; then
+      echo "ERROR: Missing my mount point $lfdir. Aborting ..."
+      exit 1
+   fi
 fi
 
 
 # To keep the logfile of this script while its running, we need a temporary place
 # until this script has done its job. This is because we are doing a mount round trip. 
 # Hence we will mount a tmpfs somewhere to keep the logfile for a while.
-mount -t tmpfs -o rw,size="$logtmpfs_size",mode=600 tmpfs "$lfdir"
+mount -t tmpfs $logtmpfsmountopts tmpfs "$lfdir"
 
 
 # Create logfile if not already done
@@ -171,13 +179,23 @@ echo "##################################################" >>"$lf"
 echo "["$t"]: START "$0"" >>"$lf"
 
 
-# Check if /dev/ram0 is mounted!! This means that var2rd.sh has been invoked
-# and everything should be ready for this script to work.
+# Check if /dev/ram0 or tmpfs is mounted on /var!! 
+# This means that var2rd.sh has been invoked and everything should be 
+# ready for this script. 
 rd=`mount | grep -wo "/dev/ram0"`
+vartmpfs=`df | grep '^tmpfs.*/var$'`
 
-if [[ -z "$rd" ]]; then
-   echo "ERROR: /dev/ram0 not mounted. Aborting ..." >>"$lf"
+if [[ -z "$rd" ]] && [[ -z "$vartmpfs" ]]; then
+   echo "ERROR: $rd and $vartmpfs not mounted!! Aborting ..." >>"$lf"
    exit 1
+elif [[ -n "$rd" ]]; then 
+     # Mark that we are using rd on /var. Info needed to unmount /var later.
+     echo "INFO: var2rd.sh has mounted $ramdisk on $var." >>"$lf"
+     method="rd"
+elif [[ -n "$vartmpfs" ]]; then
+     # Mark that we are using tmpfs on /var. Info needed to unmount /var later.
+     echo "INFO: var2rd.sh has mounted tmpfs on $var." >>"$lf"
+     method="tmpfs"
 fi
 
 
@@ -190,16 +208,20 @@ if [[ -z "$varbak" ]] || [[ -z "$varbakpart" ]]; then
    exit 1
 fi
 
-# Write info summary into logfile
-echo "SUMMARY:" >>"$lf"
-echo "MemTotal:       $memtotal MB"     >>"$lf"
-echo "MemUsed:        $memused MB"      >>"$lf"
-echo "MemDiff:        $memdiff MB"      >>"$lf"
-echo "MemPeak:        $mempeak MB"      >>"$lf"
-echo "/var size:      $varsize MB"      >>"$lf"
-echo "tmpfs size:     $tmpfssize MB"    >>"$lf"
-echo "ramdisk:        $ramdisk "      >>"$lf"
-echo "Max tmpfs size: $maxtmpfssize MB" >>"$lf"
+# Write brief overview into logfile
+echo "" >>"$lf"
+echo "MemTotal:            $memtotal MB"     >>"$lf"
+echo "MemUsed:             $memused MB"      >>"$lf"
+echo "MemDiff:             $memdiff MB"      >>"$lf"
+echo "MemPeak:             $mempeak MB"      >>"$lf"
+echo "$var size:           $varsize MB"      >>"$lf"
+echo "$varbak tmpfs size:  ${tmpfssize%?} MB"     >>"$lf"
+echo "tmpfs max. size:     $maxtmpfssize MB"      >>"$lf"
+echo "ramdisk (rd):        ${ramdisk:--}"         >>"$lf"
+echo "rd fs:               ${rdfstype:--}"        >>"$lf"
+echo "rd mount opts:       ${rdmountopts:--}"     >>"$lf"
+echo "tmpfs mount opts:    ${tmpfsmountopts:--}"  >>"$lf"
+echo "rsync opts:          $rsyncopts"            >>"$lf"
 echo "" >>"$lf" 
 
 
@@ -268,7 +290,7 @@ function chkd() {
 }
 
 
-# This funcition stops daemons/non-daemons
+# This function stops daemons/non-daemons
 function pstopper() {
   
   n=1
@@ -300,11 +322,11 @@ function pstopper() {
     # Inc.
     ((n++))
   done
-  echo "INFO: all deamons/non-daemons stopped." >>"$lf"
+  echo "INFO: all daemons/non-daemons stopped." >>"$lf"
 
 }
 
-# This function writes data from /var (ramdisk) back to /var on CF
+# This function writes data from /var (ramdisk/tmpfs) back to /var (CF)
 function syncer() {
 
   # Delete all regular files in /var/cache, but keep dir. struct. 
@@ -313,14 +335,20 @@ function syncer() {
   find /var/cache/ -type f -exec rm -r '{}' \; >/dev/null 2>>"$lf"
   echo "FIND: Done." >>"$lf"
 
-  # Sync /varbak (tmpfs/CF) with /var (ramdisk)
-  echo "RSYNC: Start sync $varbak (tmpfs/CF) with $var (ramdisk)"  >>"$lf" 2>&1
+  # Sync /varbak (tmpfs/CF) with /var (ramdisk/tmpfs)
+  echo "RSYNC: Start sync $varbak (tmpfs/CF) with $var (ramdisk/tmpfs)" >>"$lf" 2>&1
   rsync $rsyncopts "${var}/" "${varbak}/" 2>> "$lf"
   echo "RSYNC: Done." >>"$lf"
 
-  # Unmount /var (ramdisk)
-  echo "UMOUNT: Unmounting ${ramdisk} ..." >>"$lf"
-  umount "$ramdisk" >>"$lf" 2>&1 
+  # Unmount /var (ramdisk/tmpfs)
+  if [[ "$method" = "rd" ]]; then
+     echo "UMOUNT: Unmounting $ramdisk ..." >>"$lf"
+     umount "$ramdisk" >>"$lf" 2>&1 
+
+  elif [[ "$method" = "tmpfs" ]]; then
+     echo "UMOUNT: Unmounting $var (tmpfs) ..." >>"$lf"
+     umount "$var" >>"$lf" 2>&1
+  fi
   echo "UMOUNT: Done." >>"$lf"
 
   # Sync /var (CF) with /varbak (tmpfs/CF)
@@ -328,10 +356,24 @@ function syncer() {
   rsync $rsyncopts "${varbak}/" "${var}/" 2>>"$lf"
   echo "RSYNC: Done." >>"$lf"
 
-  # Mount /var (ramdisk) again
-  echo "MOUNT: Mounting ramdisk on $var (CF)" >>"$lf"
-  mount $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
-  echo "MOUNT: Done." >>"$lf"
+  # Mount /var (ramdisk/tmpfs) again
+  if [[ "$method" = "rd" ]]; then
+     echo "MOUNT: Mounting $ramdisk on $var (CF)" >>"$lf"
+     mount $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
+     echo "MOUNT: Done." >>"$lf"
+
+  elif [[ "$method" = "tmpfs" ]]; then 
+     echo "MOUNT: Mounting tmpfs on $var (CF)" >>"$lf"   
+     mount -t tmpfs -o $tmpfsmountopts tmpfs "$var" >>"$lf" 2>&1
+     echo "MOUNT: Done." >>"$lf"
+
+     # Unlike ramdisk, tmpfs loses all data after unmounting it.
+     # Hence we have to sync. /var (tmpfs) with /varbak (tmpfs/CF).
+     echo "RSYNC: Start sync $var (tmpfs) with $varbak (tmpfs/CF)" >>"$lf" 
+     rsync $rsyncopts "${varbak}/" "${var}/" >>"$lf" 2>&1
+     echo "RSYNC: Done." >>"$lf"
+  fi
+
 
 }
 
@@ -417,7 +459,7 @@ echo "" >>"$lf"
 
 
 # If used memory is greater than memory peak, we will use /varbak on CF as a cache 
-# to sync back data from /var ramdisk to /var on CF. Otherwise we use /varbak 
+# to sync back data from /var ramdisk/tmpfs to /var on CF. Otherwise we use /varbak 
 # tmpfs to sync back the data.
 
 if [[ $memused -ge $mempeak ]]; then
@@ -462,9 +504,9 @@ else
      echo "INFO: Calling $error_led with --warn-off parameter ..." >>"$lf"
      "$error_led" --warn-off "$lf" 
      
-     # Mount tmpfs
-     echo "MOUNT: Mount tmpfs with size $tmpfssize MB ..." >>"$lf"
-     mount -t tmpfs -o size=${tmpfssize}M tmpfs "$varbak"
+     # Mount tmpfs for data sync.
+     echo "MOUNT: Mount tmpfs on $varbak with size $tmpfssize MB ..." >>"$lf"
+     mount -t tmpfs -o size=${tmpfssize} tmpfs "$varbak"
      echo "MOUNT: Done." >>"$lf"
 
      # Stop daemons/non-dameons
@@ -475,16 +517,16 @@ else
      pstarter
  
      # Umount tmpfs and free RAM again
-     echo "UMOUNT: Unmounting tmpfs ..." >>"$lf"
+     echo "UMOUNT: Unmounting $varbak (tmpfs) ..." >>"$lf"
      umount "$varbak"
      echo "UMOUNT: Done." >>"$lf" 
 fi
  
 
-# Copy logfile from tmpfs to /var (ramdisk)
+# Copy logfile from tmpfs to /var (ramdisk/tmpfs)
 # Note this logfile will be saved to CF (/var) only the next time 
 # this script runs.
-echo "CAT: Append "$lf" (tmpfs) to ${var}/log/varbak.log (ramdisk)" >>"$lf"
+echo "CAT: Append "$lf" (tmpfs) to ${var}/log/varbak.log (ramdisk/tmpfs)" >>"$lf"
 cat "$lf" >>"${var}/log/varbak.log"
 
 
