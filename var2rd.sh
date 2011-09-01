@@ -9,7 +9,7 @@
 #                basename chmod chown mkdir mount umount tune2fs touch rdev 
 # Version      : 0.3
 # Script type  : system startup (rc.local)
-# Task(s)      : Create ramdisk for /var at system startup 
+# Task(s)      : Create and mount ramdisk or tmpfs on /var at system startup 
 
 # NOTE         : - The /varbak/err/err.lock must be delete manually after a failure occured.
 #                - SET "ramdisk_size=..." KERNEL PARAMETER in /etc/default/grub before running this script !!
