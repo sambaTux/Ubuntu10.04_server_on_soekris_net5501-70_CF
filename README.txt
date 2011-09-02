@@ -2,16 +2,20 @@ a) Purpose of these scripts
 ----------------------------
 
 These scripts are intended to run on a Soekris net5501-70 (512 MB RAM) embedded system 
-with a 4 GB Compact Flash (CF) as storage device. But with little modifications 
-they can also be used to run on other devices. 
+with a 4 GB Compact Flash (CF) as storage device. 
 
 Because NAND CF has "only" a write endurance of ~1,000,000 cycles per location, it 
-is a good idea to swap highly used parts of the OS to a ramdisk. In this case /var.
+is a good idea to swap highly used parts of the OS to a ramdisk/tmpfs. In this case /var.
 Like this we can increase the CF lifetime and mount i.e. the root partition in read only.
 
 As a little gadget the soekris GPIO error LED is activated when a script error occurs.
+- Fast blinking error LED means: Fatal error, please investigate.
+- Slow blinking error LED means: 
+  varbak.sh couldn't use tmpfs for data sync. It used CF instead. This is not good for the CF lifetime.
+  This is only a warning and will be deactivate automatically by varbak.sh as soon as it has enough free 
+  RAM again to use a tmpfs.
 
-Tests here were made with an Ubuntu10.04 server 32Bit system on Soekris net5501-70 hardware.
+Note: Tests here were made with an Ubuntu10.04 server 32Bit on a Soekris net5501-70 system.
 
 
 b) How to use these scripts
@@ -26,7 +30,7 @@ b) How to use these scripts
                Mount options: nodev, nosuid, noatime, noexec
 
 2) run "os-config.sh" once to prepare the OS for "var2rd.sh" and "varbak.sh", for 
-   soekris serial console, etc... 
+   soekris serial console, ... (optional) 
 
 3) copy "error-led.sh" to /usr/local/sbin. This script is used by "var2rd.sh" and "varbak.sh" 
 
@@ -124,6 +128,8 @@ NOTE: The following steps where tested with a Ubuntu10.04 Desktop 32Bit system.
 
         Note:  - The default baud rate of the net5501 is:  19200
                - Soekris doesn't support any kind of Flow Control. 
+               - I used a USB to Serial adapter (/dev/ttyUSB). If you use a
+                 COM slot adapt it to /dev/ttyS?
 
   1.3) Connect to net5501:
 
@@ -137,7 +143,7 @@ NOTE: The following steps where tested with a Ubuntu10.04 Desktop 32Bit system.
 
        Download newest comBIOS: http://soekris.com/downloads.html
 
-       Look here for a update how to: http://wiki.soekris.info/Updating_Bios
+       Look here for an update how to: http://wiki.soekris.info/Updating_Bios
 
        As we have just configured "minicom", I recommend to use it here, too.
 
