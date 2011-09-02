@@ -34,44 +34,47 @@ error_led="/usr/local/sbin/error-led.sh"
 # This function is executed by "trap" and therefore not defined in the "function" section 
 function lastact() {
 
-  dt=`date +%Y.%m.%d-%H:%M:%S`
+  # Exec. trap code only if an explicit exit code > 0, or a SIG??? has been trapped.
+  # Like this the harmless "exit 0" is omitted. 
+  if (( $? != 0 )); then
+     dt=`date +%Y.%m.%d-%H:%M:%S`
 
-  # Create "err.lock" to publish an error. This mark will also be checked 
-  # by the script varbak.sh. If this file exists, varbak.sh and var2rd.sh won't run !!
-  errdir="/varbak/err"
-  err="${errdir}/err.lock"
-  errlf="${errdir}/varbak-error.log"
+     # Create "err.lock" to publish an error. This mark will also be checked 
+     # by the script varbak.sh. If this file exists, varbak.sh and var2rd.sh won't run !!
+     errdir="/varbak/err"
+     err="${errdir}/err.lock"
+     errlf="${errdir}/varbak-error.log"
 
-  # We need to check if /varbak (tmpfs) is not already mounted.
-  # If so, we have to unmount it first in order to save the error logfile on /varbak (CF),
-  # and not on /varbak (tmpfs); else we would lose the logfile after reboot.
-  tempfs=`df -hT | grep '^tmpfs.*/varbak$'`
+     # We need to check if /varbak (tmpfs) is already mounted.
+     # If so, we have to unmount it first in order to save the error logfile on /varbak (CF),
+     # and not on /varbak (tmpfs); else we would lose the logfile after unmounting tmpfs or a reboot.
+     tempfs=`cat /proc/mounts | grep '^tmpfs /varbak '`
 
-  # Lazy unmount /varbak (tmpfs). Not nice ...
-  [[ -n "$tempfs" ]] && umount -l /varbak 
+     # Lazy unmount /varbak (tmpfs). Not nice ...
+     [[ -n "$tempfs" ]] && umount -l /varbak 
   
-  # Create error dir, if not already done
-  [[ ! -d "$errdir" ]] && mkdir -m 700 "$errdir"
+     # Create error dir, if not already done
+     [[ ! -d "$errdir" ]] && mkdir -m 700 "$errdir"
 
-  # Create err.lock
-  echo "A fatal error occured !!!!" >"$err"
-  echo "That means that neither var2rd.sh nor varbak.sh will start again until this file is deleted." >>"$err"
-  echo "This file was created by $0 at $dt" >>"$err"
-  echo "Please investigate ... " >>"$err"  
-  chmod 400 "$err"
+     # Create err.lock
+     echo "A fatal error occured !!!!" >>"$err"
+     echo "That means that neither var2rd.sh nor varbak.sh will start again until this file is deleted." >>"$err"
+     echo "This file was created by $0 at $dt" >>"$err"
+     echo "Please investigate ... " >>"$err"  
+     chmod 400 "$err"
 
-  # Save logfile (or piece of it)
-  if [[ -e "$lf" ]]; then
-     cat "$lf" >>"$errlf"
+     # Save logfile (or piece of it)
+     if [[ -e "$lf" ]]; then
+        cat "$lf" >>"$errlf"
+     fi
+
+     # Activate error led
+     "$error_led" --fatal "$errlf" &
   fi
-
-  # Activate error led
-  "$error_led" --fatal "$errlf" &
-  exit 1
 }
 
 # If sth. goes wrong ...
-trap 'lastact' TERM KILL INT
+trap 'lastact; exit 0' KILL TERM INT ERR EXIT
 
 
 ###################################################################################
@@ -129,7 +132,7 @@ start_excludes=("dhclient3" "dhclient")
 lfdir="/media/varbak"         #mount point for logfile
 lf="${lfdir}/varbak.log"      #logfile
 logtmpfs_size="200k"          #size for logfile tmpfs
-logtmpfsmountopts="-o rw,nosuid,nodev,nouser,noexec,size=200k,mode=600" #logfile tmpfs mount options
+logtmpfsmountopts="rw,nosuid,nodev,nouser,noexec,size=200k,mode=600" #logfile tmpfs mount options
 t=`date +%Y.%m.%d-%H:%M:%S`
 var="/var"
 varbak="/varbak"
@@ -144,7 +147,6 @@ maxtmpfssize="170"                                                 #max. size of
 ramdisk=`cat /proc/mounts | grep "/dev/ram." | cut -d ' ' -f 1`    #get ramdisk
 rdfstype=`cat /proc/mounts | grep "/dev/ram." | awk -F ' ' '{ print $3 }'`                #get ramdisk fs type
 rdmountopts=`cat /proc/mounts | grep "/dev/ram." | awk -F ' ' '{ print $(NF-2) }'`        #get ramdisk mount options
-rdmountopts="-t $rdfstype -o $rdmountopts"                                                #build mount options string
 tmpfsmountopts=`cat /proc/mounts | grep "^tmpfs $var " | awk -F ' ' '{ print $(NF-2) }'`  #get /var (tmpfs) mount options
 rsyncopts="-rogptl --delete-before"                                                       #options for rsync cmd
 
@@ -162,7 +164,7 @@ fi
 # To keep the logfile of this script while its running, we need a temporary place
 # until this script has done its job. This is because we are doing a mount round trip. 
 # Hence we will mount a tmpfs somewhere to keep the logfile for a while.
-mount -t tmpfs $logtmpfsmountopts tmpfs "$lfdir"
+mount -t tmpfs -o $logtmpfsmountopts tmpfs "$lfdir"
 
 
 # Create logfile if not already done
@@ -179,20 +181,17 @@ echo "##################################################" >>"$lf"
 echo "["$t"]: START "$0"" >>"$lf"
 
 
-# Check if /dev/ram0 or tmpfs is mounted on /var!! 
+# Check if /dev/ram? or tmpfs is mounted on /var!! 
 # This means that var2rd.sh has been invoked and everything should be 
-# ready for this script. 
-rd=`mount | grep -wo "/dev/ram0"`
-vartmpfs=`df | grep '^tmpfs.*/var$'`
-
-if [[ -z "$rd" ]] && [[ -z "$vartmpfs" ]]; then
-   echo "ERROR: $rd and $vartmpfs not mounted!! Aborting ..." >>"$lf"
+# ready for this script, or this script ran earlier without an error.
+if [[ -z "$ramdisk" ]] && [[ -z "$tmpfsmountopts" ]]; then
+   echo "ERROR: No $ramdisk and tmpfs mounted on $var !! Aborting ..." >>"$lf"
    exit 1
-elif [[ -n "$rd" ]]; then 
+elif [[ -n "$ramdisk" ]]; then 
      # Mark that we are using rd on /var. Info needed to unmount /var later.
      echo "INFO: var2rd.sh has mounted $ramdisk on $var." >>"$lf"
      method="rd"
-elif [[ -n "$vartmpfs" ]]; then
+elif [[ -n "$tmpfsmountopts" ]]; then
      # Mark that we are using tmpfs on /var. Info needed to unmount /var later.
      echo "INFO: var2rd.sh has mounted tmpfs on $var." >>"$lf"
      method="tmpfs"
@@ -359,7 +358,7 @@ function syncer() {
   # Mount /var (ramdisk/tmpfs) again
   if [[ "$method" = "rd" ]]; then
      echo "MOUNT: Mounting $ramdisk on $var (CF)" >>"$lf"
-     mount $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
+     mount -t $rdfstype -o $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
      echo "MOUNT: Done." >>"$lf"
 
   elif [[ "$method" = "tmpfs" ]]; then 
@@ -498,14 +497,16 @@ else
      echo "INFO: Using varbak on tmpfs because there is enough free RAM." >>"$lf"
 
      # Deactivate warning led because we have enough free RAM.
-     echo "KILLALL: Killing $error_led ..." >>"$lf"
-     killall -e -9 `basename $error_led` >>"$lf" 2>&1
-     echo "KILLALL: Done." >>"$lf"
-     echo "INFO: Calling $error_led with --warn-off parameter ..." >>"$lf"
-     "$error_led" --warn-off "$lf" 
+     if [[ $(pgrep $(basename "$error_led")) ]]; then 
+        echo "KILLALL: Killing $error_led ..." >>"$lf"
+        killall -e -9 `basename "$error_led"` >>"$lf" 2>&1
+        echo "KILLALL: Done." >>"$lf"
+        echo "INFO: Calling $error_led with --warn-off parameter ..." >>"$lf"
+        "$error_led" --warn-off "$lf" 
+     fi
      
      # Mount tmpfs for data sync.
-     echo "MOUNT: Mount tmpfs on $varbak with size $tmpfssize MB ..." >>"$lf"
+     echo "MOUNT: Mount tmpfs on $varbak with size ${tmpfssize%?} MB ..." >>"$lf"
      mount -t tmpfs -o size=${tmpfssize} tmpfs "$varbak"
      echo "MOUNT: Done." >>"$lf"
 
