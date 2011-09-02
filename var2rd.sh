@@ -5,9 +5,9 @@
 # Start date   : 09.08.2011
 # OS tested    : Ubuntu10.04
 # BASH version : 4.1.5(1)-release
-# Requires     : grep pgrep uniq awk df cp cut cat lsof initctl find rsync mkfs ps killall
+# Requires     : grep pgrep uniq awk sed df cp cut cat lsof initctl find rsync mkfs ps killall
 #                basename chmod chown mkdir mount umount tune2fs touch rdev 
-# Version      : 0.3
+# Version      : 0.4
 # Script type  : system startup (rc.local)
 # Task(s)      : Create and mount ramdisk or tmpfs on /var at system startup 
 
@@ -37,37 +37,40 @@ error_led="/usr/local/sbin/error-led.sh"
 
 # This function is executed by "trap" and therefore not defined in the "function" section
 function lastact() {
-
-  dt=`date +%Y.%m.%d-%H:%M:%S` 
-
-  # Create "err.lock" to publish an error. This mark will also be checked 
-  # by the script varbak.sh. If this file exists, varbak.sh and var2rd.sh won't run !!
-  errdir="/varbak/err"
-  err="${errdir}/err.lock"
-  errlf="${errdir}/var2rd-error.log"
-   
-  # Create error dir if not already done
-  [[ -d "$errdir" ]] || mkdir -m 700 "$errdir"
-
-  # Create err.lock
-  echo "A fatal error occured !!!!" >"$err"
-  echo "That means that neither var2rd.sh nor varbak.sh will start again until this file is deleted." >>"$err"
-  echo "This file was created by $0 at $dt" >>"$err"
-  echo "Please investigate ... " >>"$err"
-  chmod 400 "$err"
   
-  # Save logfile (or piece of it)
-  if [[ -e "$lf" ]]; then
-     cat "$lf" >>"$errlf"
-  fi
+  # Exec. trap code only if an explicit exit code > 0, or a SIG??? has been trapped.
+  # Like this the harmless "exit 0" is omitted. 
+  if (( $? != 0 )); then
+     dt=`date +%Y.%m.%d-%H:%M:%S` 
+  
+     # Create "err.lock" to publish an error. This mark will also be checked 
+     # by the script varbak.sh. If this file exists, varbak.sh and var2rd.sh won't run !!
+     errdir="/varbak/err"
+     err="${errdir}/err.lock"
+     errlf="${errdir}/var2rd-error.log"
+   
+     # Create error dir if not already done
+     [[ -d "$errdir" ]] || mkdir -m 700 "$errdir"
 
-  # Activate error led
-  "$error_led" --fatal "$errlf" &
-  exit 1
+     # Create err.lock
+     echo "A fatal error occured !!!!" >>"$err"
+     echo "That means that neither var2rd.sh nor varbak.sh will start again until this file is deleted." >>"$err"
+     echo "This file was created by $0 at $dt" >>"$err"
+     echo "Please investigate ... " >>"$err"
+     chmod 400 "$err"
+  
+     # Save logfile (or piece of it)
+     if [[ -e "$lf" ]]; then
+        cat "$lf" >>"$errlf"
+     fi
+
+     # Activate error led
+     "$error_led" --fatal "$errlf" &
+  fi
 }
 
 # If sth. goes wrong ...
-trap 'lastact' TERM INT KILL 
+trap 'lastact; exit 0' KILL TERM INT ERR EXIT
 
 
 ###################################################################################
@@ -137,6 +140,8 @@ logtmpfsmountopts="-o rw,nosuid,nodev,nouser,noexec,size=200k,mode=600" #logfile
 t=`date +%Y.%m.%d-%H:%M:%S` 
 ramdisk="/dev/ram0"
 var="/var"
+varlock=`df | sed -n '/\/var\/lock$/p'`    #is /var/lock a partition. Note: Unlike grep, sed uses exit code 0 if it doesn't find pattern. 
+varrun=`df | sed -n '/\/var\/run$/p'`      #is /var/run a partition.        This is important to not invoke "trap" by mistake.
 varbak="/varbak"
 rdfstype="-t ext2"                         #option for mkfs AND mount for ramdisk (rd)
 rdmountopts="-o rw,nosuid,nodev,nouser"    #ramdisk mount options
@@ -206,7 +211,7 @@ function get_ptype() {
 
    # NOTE: initctl uses exit code 1 for errors AND daemons that are already stopped/started!
    #       Hence we cannot use exit codes here.
-   ptype=`initctl list | grep -wo "$p"`
+   ptype=`initctl list | awk -F ' ' '/^'"$p"' / { print $1 }'`
    
    if [[ -n "$ptype" ]]; then
       # p is upstart      
@@ -233,13 +238,18 @@ function pkiller() {
  echo "INFO: "$p" is a non-daemon. Killing it gracefully ..." >>"$lf"
  killall -e -15 "$p" >>"$lf" 2>&1
 
- # Check if process was really killed, if not, try to kill it hardly
- if [[ $(ps -e | grep -wo "$p") ]]; then
+ # Check if process was really killed, if not, try again
+ proc=$(ps -e | awk -F ' ' '/'" "$p"$"'/ { print $NF }')
+
+ if [[ -n "$proc" ]]; then
     echo "INFO: Non-daemon "$p" is unwilling to die. Killing it brutal ..." >>"$lf"
     killall -e -9 "$p" >>"$lf" 2>&1
 
     # Check again if process is really dead
-    if [[ ! $(ps -e | grep -wo "$p") ]]; then
+    unset proc
+    proc=$(ps -e | awk -F ' ' '/'" "$p"$"'/ { print $NF }')
+
+    if [[ -z "$proc" ]]; then
        echo "INFO: Non-daemon "$p" killed." >>"$lf"
     else
        echo "ERROR: Non-daemon "$p" is immortal !! Aborting..." >>"$lf"
@@ -371,12 +381,18 @@ rsync $rsyncopts1 /var/lock/ /varbak/lock >>"$lf"
 echo "RSYNC: Done." >>"$lf"
 
 
-# Unmount /var/lock and /var/run
-# NOTE: /var/run & /var/lock use tmpfs by default. We use ramdisk with ext2 or tmpfs.
-echo "UMOUNT: Unmounting /var/lock and /var/run ..." >>"$lf"
-umount "${var}/lock" >>"$lf" 2>&1
-umount "${var}/run" >>"$lf" 2>&1
-echo "UMOUNT: Done." >>"$lf"
+# Unmount /var/lock and /var/run if they are mounted. Should be the case in Ubuntu10.04.
+# NOTE: /var/run & /var/lock use each one a tmpfs by default. (at least in Ubuntu10.04)
+if [[ -n "$varlock" ]]; then
+   echo "UMOUNT: Unmounting $varlock ..." >>"$lf"
+   umount "${var}/lock" >>"$lf" 2>&1
+   echo "UMOUNT: Done." >>"$lf"
+fi
+if [[ -n "$varrun" ]]; then
+   echo "UMOUNT: Unmounting $varrun ..." >>"$lf"
+   umount "${var}/run" >>"$lf" 2>&1
+   echo "UMOUNT: Done." >>"$lf"
+fi
 
 
 # Sync /varbak with /var 
