@@ -140,8 +140,10 @@ logtmpfsmountopts="-o rw,nosuid,nodev,nouser,noexec,size=200k,mode=600" #logfile
 t=`date +%Y.%m.%d-%H:%M:%S` 
 ramdisk="/dev/ram0"
 var="/var"
-varlock=`df | sed -n '/\/var\/lock$/p'`    #is /var/lock a partition. Note: Unlike grep, sed uses exit code 0 if it doesn't find pattern. 
-varrun=`df | sed -n '/\/var\/run$/p'`      #is /var/run a partition.        This is important to not invoke "trap" by mistake.
+varlock=`df | awk '/\/var\/lock$/ {print $NF}'`  #is /var/lock a partition. Note: Unlike grep, awk uses exit code 0 if 
+#                                                                                 it doesn't find pattern. This is important to 
+#                                                                                 not invoke "trap" by mistake. 
+varrun=`df | awk '/\/var\/run$/ {print $NF}'`    #is /var/run a partition.       
 varbak="/varbak"
 rdfstype="-t ext2"                         #option for mkfs AND mount for ramdisk (rd)
 rdmountopts="-o rw,nosuid,nodev,nouser"    #ramdisk mount options
