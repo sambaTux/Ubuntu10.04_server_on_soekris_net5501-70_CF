@@ -7,7 +7,7 @@
 # BASH version : 4.1.5(1)-release
 # Requires     : grep pgrep uniq awk sed df cp cut cat lsof initctl find rsync mkfs ps killall
 #                basename chmod chown mkdir mount umount tune2fs touch rdev 
-# Version      : 0.4
+# Version      : 0.5
 # Script type  : system startup (rc.local)
 # Task(s)      : Create and mount ramdisk or tmpfs on /var at system startup 
 
@@ -136,7 +136,7 @@ rdORtmpfs="tmpfs"
 lfdir="/media/var2rd"       #mount point for the logfile (tmpfs)
 lfdir2="/media/varbak"      #mount point for the logfile (tmpfs) of "varbak.sh"
 lf="${lfdir}/var2rd.log"    #logfile
-logtmpfsmountopts="-o rw,nosuid,nodev,nouser,noexec,size=200k,mode=600" #logfile tmpfs mount options
+logtmpfsmountopts="rw,nosuid,nodev,nouser,noexec,size=200k,mode=600" #logfile tmpfs mount options
 t=`date +%Y.%m.%d-%H:%M:%S` 
 ramdisk="/dev/ram0"
 var="/var"
@@ -145,16 +145,24 @@ varlock=`df | awk '/\/var\/lock$/ {print $NF}'`  #is /var/lock a partition. Note
 #                                                                                 not invoke "trap" by mistake. 
 varrun=`df | awk '/\/var\/run$/ {print $NF}'`    #is /var/run a partition.       
 varbak="/varbak"
-rdfstype="-t ext2"                         #option for mkfs AND mount for ramdisk (rd)
-rdmountopts="-o rw,nosuid,nodev,nouser"    #ramdisk mount options
+rdfstype="ext2"                            #ramdisk fs type for mkfs AND mount! 
+rdmountopts="rw,nosuid,nodev,nouser"       #ramdisk mount options
 rdlabel="varrd"                            #ramdisk label
 rdfsck="off"                               #turn on/off /var (ramdisk) fsck. Options are: "on" and "off"
 rootfsck="off"                             #turn on/off / fsck. Options are: "on" and "off"
-tmpfsmountopts="-o rw,nosuid,nodev,nouser,size=150m"  #tmpfs mount options
+tmpfsmountopts="rw,nosuid,nodev,nouser,size=150m"  #tmpfs mount options
 rsyncopts1="-rogptl --delete-before"                             #sync /varbak/{run,lock} (CF) with /var/{run,lock} (tmpfs)
 rsyncopts2="-rogptl --delete-before --exclude=err --exclude=run --exclude=lock"    #sync /varbak/ (CF) with /var/ (CF)
 rsyncopts3="-rogptl --delete-before"                             #sync /var (ramdisk) with /varbak (CF)
 
+# Make sure that this script doesn't run serveral times (for whatever reason).
+rdexists=`df | grep -wo ^"$ramdisk ".*" $var"$ || :`
+tmpfsexists=`df | grep -wo ^"tmpfs ".*" $var"$ || :`
+
+if [[ -n "$rdexists" || -n "$tmpfsexists" ]]; then
+   echo "ERROR: `basename "$0"` was already invoked once !! Aborting ..."
+   exit 1
+fi
 
 # Create mount points for the logfile (tmpfs) of "var2rd.sh" and "varbak.sh"
 # Creating it for "varbak.sh" now is usefull when we want to mount / in read only later.
@@ -174,7 +182,7 @@ fi
 # until this script has done its job. This is because we are doing a mount round trip. 
 # Hence we will mount a tmpfs somewhere to keep the logfile for a while.
 echo "MOUNT: Mounting tmpfs for logfile ..."
-mount -t tmpfs $logtmpfsmountopts tmpfs "$lfdir"
+mount -t tmpfs -o $logtmpfsmountopts tmpfs "$lfdir"
 echo "MOUNT: Done."
 
 
@@ -191,7 +199,23 @@ fi
 echo "" >>"$lf"
 echo "#####################################################" >>"$lf"
 echo "["$t"]: START "$0"" >>"$lf"
-
+echo "" >>"$lf"
+echo "Method:                             $rdORtmpfs"  >>"$lf"
+echo "`basename $0` log file mount point: $lfdir"  >>"$lf"
+echo "varbak.sh log file mount point: $lfdir2"     >>"$lf"
+echo "Log file:                       $lf"         >>"$lf"
+echo "Log file mount opts: $logtmpfsmountopts"      >>"$lf"
+echo "Ramdisk (rd):        $ramdisk"                >>"$lf"
+echo "rd fs type:          $rdfstype"               >>"$lf"
+echo "rd mount opts:       $rdmountopts"            >>"$lf"
+echo "rd label:            $rdlabel"                >>"$lf"
+echo "rd fsck:             $rdfsck"                 >>"$lf"
+echo "root fsck:           $rootfsck"               >>"$lf"
+echo "tmpfs mount opts:    $tmpfsmountopts"         >>"$lf"
+echo "rsync 1 opts:        $rsyncopts1"             >>"$lf"
+echo "rsync 2 opts:        $rsyncopts2"             >>"$lf"
+echo "rsync 3 opts:        $rsyncopts3"             >>"$lf"
+echo "" >>"$lf"
 
 # Are /var and /varbak partitions
 varpart=`df -h |  grep "$var"$ | awk -F' ' '{ print $3 }'`
@@ -406,7 +430,7 @@ echo "RSYNC: Done." >>"$lf"
 # If we use ramdisk, format it and turn of fsck if wanted.
 if [[ "$rdORtmpfs" = "rd" ]]; then
    echo "MKFS: Formating ramdisk ..." >>"$lf"
-   mkfs $rdfstype -m 0 -L "$rdlabel" "$ramdisk" >>"$lf" 2>&1 
+   mkfs -t $rdfstype -m 0 -L "$rdlabel" "$ramdisk" >>"$lf" 2>&1 
    echo "MKFS: Done." >>"$lf"
    
    if [[ "$rdfsck" = "off" ]]; then
@@ -421,13 +445,14 @@ fi
 # Mount ramdisk or tmpfs on /var.
 if [[ "$rdORtmpfs" = "rd" ]]; then
    echo "MOUNT: Mounting ramdisk on $var" >>"$lf"
-   mount $rdfstype $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
+   mount -t $rdfstype -o $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
    echo "MOUNT: Done." >>"$lf"
 
 elif [[ "$rdORtmpfs" = "tmpfs" ]]; then
      echo "MOUNT: Mounting tmpfs on $var" >>"$lf"
-     mount -t tmpfs $tmpfsmountopts tmpfs "$var" >>"$lf" 2>&1
+     mount -t tmpfs -o $tmpfsmountopts tmpfs "$var" >>"$lf" 2>&1
      echo "MOUNT: Done." >>"$lf"
+
      echo "SWAP: Setting swappiness to 0 ..." >>"$lf"
      echo 0 >/proc/sys/vm/swappiness
      echo "SWAP: Done." >>"$lf"
@@ -510,4 +535,5 @@ echo "["$t"]: END "$0"" >>"$lf"
 echo "#####################################################" >>"$lf"
 echo "" >>"$lf"
 
+# Happy end
 exit 0
