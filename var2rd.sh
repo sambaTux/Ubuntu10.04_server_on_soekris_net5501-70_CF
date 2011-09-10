@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Title        : var2rd.sh
-# Author       : sambaTux <sambatux@web.de>
+# Author       : sambaTux <sambatux AT web DOT de>
 # Start date   : 09.08.2011
 # OS tested    : Ubuntu10.04
 # BASH version : 4.1.5(1)-release

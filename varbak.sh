@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Title        : varbak.sh
-# Author       : sambaTux <sambatux@web.de>
+# Author       : sambaTux <sambatux AT web DOT de>
 # Start date   : 09.08.2011
 # OS tested    : ubuntu10.04
 # BASH version : 4.1.5(1)-release
@@ -548,5 +548,5 @@ echo "["$t"]: END "$0"" >>"$lf"
 echo "##################################################" >>"$lf"
 echo "" >>"$lf"
 
- 
+# Happy end 
 exit 0
