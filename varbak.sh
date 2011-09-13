@@ -7,7 +7,7 @@
 # BASH version : 4.1.5(1)-release
 # Requires     : grep pgrep free expr du uniq awk sed cut cat lsof touch
 #                initctl find rsync ps killall mount umount chmod mkdir 
-# Version      : 0.4
+# Version      : 0.5
 # Script type  : shutdown, reboot, cronjob
 # Task(s)      : copy files from /var ramdisk/tmpfs to /var on CompactFlash (CF).  
 
