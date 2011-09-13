@@ -7,17 +7,18 @@
 # BASH version : 4.1.5(1)-release
 # Requires     : grep pgrep uniq awk sed df cp cut cat lsof initctl find rsync mkfs ps killall
 #                basename chmod chown mkdir mount umount tune2fs touch rdev 
-# Version      : 0.5
+# Version      : 0.6
 # Script type  : system startup (rc.local)
 # Task(s)      : Create and mount ramdisk or tmpfs on /var at system startup 
 
 # NOTE         : - The /varbak/err/err.lock must be delete manually after a failure occured.
-#                - SET "ramdisk_size=..." KERNEL PARAMETER in /etc/default/grub before running this script !!
+#                - If you want to use a ramdisk, do the following first: 
+#                  SET "ramdisk_size=..." KERNEL PARAMETER in /etc/default/grub before running this script !!
 #                  I.e. "ramdisk_size=170000" (~ 170 MB). And dont forget to invoke "update-grub" and "reboot" so
 #                  that ramdisk size is active. This config can also be done with "os-config.sh" script.
 #                - If you want to mount the root partition in read only mode, don't use this script but use 
 #                  /etc/rc.local instead, because it's possible that the script disturbs itself while remounting /. 
-#                - The "error-led.sh" script is started as bg job.
+#                - In case of an error/warning the "error-led.sh" script is started as bg job.
 
 # LICENSE      : Copyright (C) 2011 Robert Schoen
 
@@ -31,6 +32,13 @@
 ###################################################################################
 ###################################################################################
 ###   SECTION: Trap
+
+# Save command history of this script in array by using trap.
+# This may be usefull for debugging purpose in case of a script crash/error.
+# This array is used by lastact().
+declare -a cmdhist
+trap 'cmdhist[${#cmdhist[@]}]=$BASH_COMMAND' DEBUG
+
 
 # Path to "error-led.sh" script.
 error_led="/usr/local/sbin/error-led.sh"
@@ -57,6 +65,12 @@ function lastact() {
      echo "That means that neither var2rd.sh nor varbak.sh will start again until this file is deleted." >>"$err"
      echo "This file was created by $0 at $dt" >>"$err"
      echo "Please investigate ... " >>"$err"
+     echo "" >>"$err"
+     echo "Script cmd history:" >>"$err"
+     for cmd in "${cmdhist[@]}"; do
+         echo $cmd >>"$err"
+     done
+     echo "" >>"$err"
      chmod 400 "$err"
   
      # Save logfile (or piece of it)
