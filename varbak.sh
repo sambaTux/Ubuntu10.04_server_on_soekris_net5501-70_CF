@@ -8,11 +8,14 @@
 # Requires     : grep pgrep free expr du uniq awk sed cut cat lsof touch
 #                initctl find rsync ps killall mount umount chmod mkdir 
 # Version      : 0.4
-# Script type  : cronjob, shutdown
+# Script type  : shutdown, reboot, cronjob
 # Task(s)      : copy files from /var ramdisk/tmpfs to /var on CompactFlash (CF).  
 
 # NOTE         : - The /varbak/err/err.lock must be delete manually after a failure occured.
-#                - The "error-led.sh" script is started as bg job.
+#                - In case of an error/warning the "error-led.sh" script is started as bg job.
+#                - When this script runs at system reboot or shutdown, its log file cannot be saved, because 
+#                  the log file is saved to /var/log (tmpfs or ramdisk), and not to /var (CF).
+#                  Only the error log file is kept in /varbak/err/ (CF).
 
 # LICENSE      : Copyright (C) 2011 Robert Schoen
 
@@ -27,6 +30,12 @@
 ###################################################################################
 ###################################################################################
 ###   SECTION: Trap
+
+# Save command history of this script in array by using trap.
+# This may be usefull for debugging purpose in case of a script crash/error.
+# This array is used by lastact().
+declare -a cmdhist
+trap 'cmdhist[${#cmdhist[@]}]=$BASH_COMMAND' DEBUG
 
 # Path to "error-led.sh" script.
 error_led="/usr/local/sbin/error-led.sh"
@@ -60,7 +69,13 @@ function lastact() {
      echo "A fatal error occured !!!!" >>"$err"
      echo "That means that neither var2rd.sh nor varbak.sh will start again until this file is deleted." >>"$err"
      echo "This file was created by $0 at $dt" >>"$err"
-     echo "Please investigate ... " >>"$err"  
+     echo "Please investigate ... " >>"$err"     
+     echo "" >>"$err"
+     echo "Script cmd history:" >>"$err"
+     for cmd in "${cmdhist[@]}"; do
+         echo $cmd >>"$err"
+     done
+     echo "" >>"$err"  
      chmod 400 "$err"
 
      # Save logfile (or piece of it)
