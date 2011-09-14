@@ -7,15 +7,12 @@
 # BASH version : 4.1.5(1)-release
 # Requires     : grep pgrep free expr du uniq awk sed cut cat lsof touch
 #                initctl find rsync ps killall mount umount chmod mkdir 
-# Version      : 0.5
+# Version      : 0.6
 # Script type  : shutdown, reboot, cronjob
 # Task(s)      : copy files from /var ramdisk/tmpfs to /var on CompactFlash (CF).  
 
 # NOTE         : - The /varbak/err/err.lock must be delete manually after a failure occured.
 #                - In case of an error/warning the "error-led.sh" script is started as bg job.
-#                - When this script runs at system reboot or shutdown, its log file cannot be saved, because 
-#                  the log file is saved to /var/log (tmpfs or ramdisk), and not to /var (CF).
-#                  Only the error log file is kept in /varbak/err/ (CF).
 
 # LICENSE      : Copyright (C) 2011 Robert Schoen
 
@@ -143,6 +140,11 @@ stop_excludes=("`basename "$0"`" "grep" "cut" "uniq")
 start_excludes=("dhclient3" "dhclient")
 
 
+# /sbin/init invokes this script in runlevel 0 & 6 with the "stop" argument.
+# In that case we don't need to start the daemons/non-daemons again after they were stopped. 
+# And we don't need to mount the /var ramdisk/tmpfs again.
+syshalt="$1"
+
 # NOTE: sizes are in MB.
 lfdir="/media/varbak"         #mount point for logfile
 lf="${lfdir}/varbak.log"      #logfile
@@ -269,7 +271,7 @@ function get_ptype() {
 }
 
 
-# This function kills non-daemons and checks if they are really dead
+# This function kills non-daemons and checks if they are really dead.
 function pkiller() {
 
  echo "INFO: "$p" is a non-daemon. Killing it gracefully ..." >>"$lf"
@@ -340,7 +342,9 @@ function pstopper() {
 
 }
 
-# This function writes data from /var (ramdisk/tmpfs) back to /var (CF)
+# This function writes data from /var (ramdisk/tmpfs) back to /var (CF).
+# In case of a system reboot/shutdown, this function will not remount 
+# a ramdisk/tmpfs on /var, otherwise it will.
 function syncer() {
 
   # Delete all regular files in /var/cache, but keep dir. struct. 
@@ -370,24 +374,30 @@ function syncer() {
   rsync $rsyncopts "${varbak}/" "${var}/" 2>>"$lf"
   echo "RSYNC: Done." >>"$lf"
 
-  # Mount /var (ramdisk/tmpfs) again
-  if [[ "$method" = "rd" ]]; then
-     echo "MOUNT: Mounting $ramdisk on $var (CF)" >>"$lf"
-     mount -t $rdfstype -o $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
-     echo "MOUNT: Done." >>"$lf"
+  # Mount /var (ramdisk/tmpfs) again, only if we are not in a system reboot/shutdown process.
+  if [[ "$syshalt" != "stop" ]]; then
+     echo "INFO: System is NOT in reboot/shutdown process ..." >>"$lf"
 
-  elif [[ "$method" = "tmpfs" ]]; then 
-     echo "MOUNT: Mounting tmpfs on $var (CF)" >>"$lf"   
-     mount -t tmpfs -o $tmpfsmountopts tmpfs "$var" >>"$lf" 2>&1
-     echo "MOUNT: Done." >>"$lf"
+     if [[ "$method" = "rd" ]]; then
+        echo "MOUNT: Mounting $ramdisk on $var (CF)" >>"$lf"
+        mount -t $rdfstype -o $rdmountopts "$ramdisk" "$var" >>"$lf" 2>&1
+        echo "MOUNT: Done." >>"$lf"
 
-     # Unlike ramdisk, tmpfs loses all data after unmounting it.
-     # Hence we have to sync. /var (tmpfs) with /varbak (tmpfs/CF).
-     echo "RSYNC: Start sync $var (tmpfs) with $varbak (tmpfs/CF)" >>"$lf" 
-     rsync $rsyncopts "${varbak}/" "${var}/" >>"$lf" 2>&1
-     echo "RSYNC: Done." >>"$lf"
+     elif [[ "$method" = "tmpfs" ]]; then 
+          echo "MOUNT: Mounting tmpfs on $var (CF)" >>"$lf"   
+          mount -t tmpfs -o $tmpfsmountopts tmpfs "$var" >>"$lf" 2>&1
+          echo "MOUNT: Done." >>"$lf"
+
+         # Unlike ramdisk, tmpfs loses all data after unmounting it.
+         # Hence we have to sync. /var (tmpfs) with /varbak (tmpfs/CF).
+         echo "RSYNC: Start sync $var (tmpfs) with $varbak (tmpfs/CF)" >>"$lf" 
+         rsync $rsyncopts "${varbak}/" "${var}/" >>"$lf" 2>&1
+         echo "RSYNC: Done." >>"$lf"
+     fi
+  else
+     echo "INFO: System is in reboot/shutdown process ..." >>"$lf"
+     echo "...   Thus remounting ramdisk/tmpfs on $var is needless." >>"$lf"
   fi
-
 
 }
 
@@ -489,8 +499,12 @@ if [[ $memused -ge $mempeak ]]; then
    pstopper
    # Sync data
    syncer   
-   # Start daemons/non-daemons again
-   pstarter
+   # Start daemons/non-daemons again, but only if we are not in system reboot/shutdown process.
+   if [[ "$syshalt" != "stop" ]]; then
+      pstarter
+   else
+      echo "INFO: We are in reboot/shutdown process...will not restart daemons/non-daemons." >>"$lf"
+   fi
    
 elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
 
@@ -505,8 +519,12 @@ elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
      pstopper
      # Sync data
      syncer
-     # Start daemons/non-daemons again
-     pstarter
+     # Start daemons/non-daemons again, but only if we are not in system reboot/shutdown process.
+     if [[ "$syshalt" != "stop" ]]; then
+        pstarter
+     else
+        echo "INFO: We are in reboot/shutdown process...will not restart daemons/non-daemons." >>"$lf"
+     fi
 else 
      # Use /varbak on tmpfs because we have enough free RAM
      echo "INFO: Using varbak on tmpfs because there is enough free RAM." >>"$lf"
@@ -529,9 +547,13 @@ else
      pstopper   
      # Sync data
      syncer
-     # Start daemons/non-daemon again
-     pstarter
- 
+     # Start daemons/non-daemons again, but only if we are not in system reboot/shutdown process.
+     if [[ "$syshalt" != "stop" ]]; then
+        pstarter
+     else
+        echo "INFO: We are in reboot/shutdown process...will not restart daemons/non-daemons." >>"$lf"
+     fi 
+
      # Umount tmpfs and free RAM again
      echo "UMOUNT: Unmounting $varbak (tmpfs) ..." >>"$lf"
      umount "$varbak"
@@ -539,9 +561,9 @@ else
 fi
  
 
-# Copy logfile from tmpfs to /var (ramdisk/tmpfs)
+# Copy logfile from tmpfs to /var (ramdisk/tmpfs/CF)
 # Note this logfile will be saved to CF (/var) only the next time 
-# this script runs.
+# this script runs, or if we are in reboot/shutdown process.
 echo "CAT: Append "$lf" (tmpfs) to ${var}/log/varbak.log (ramdisk/tmpfs)" >>"$lf"
 cat "$lf" >>"${var}/log/varbak.log"
 
