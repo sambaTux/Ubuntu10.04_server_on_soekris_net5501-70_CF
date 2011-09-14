@@ -38,7 +38,12 @@ b) How to use these scripts
    Note: If you want to mount the root partition in read only, use rc.local. Otherwise 
          the script may disturb itself by accessing / while remounting / in read only.
 
-5) copy "varbak.sh" to /usr/local/sbin and use it as cronjob in order to save data from ramdisk to CF. 
+5) copy "varbak.sh" to /usr/local/sbin and use it as cronjob and reboot/shutdown script 
+         in order to save data from ramdisk/tmpfs back to CF. 
+   Note: You need to place a symlink in /etc/rc0.d/ and /etc/rc6.d/ to use this script as 
+         reboot/shutdown script. This is important because /sbin/init invokes the scripts 
+         in /etc/rc[06].d/ with the "stop" argument. This argument is recognized by this 
+         script in order to config itself.
 
 
 c) Brief overview about the tasks that these scripts accomplish
@@ -88,8 +93,8 @@ varbak.sh
    - sync /varbak (CF/tmpfs) with /var (ramdisk/tmpfs)
    - unmount /var (ramdisk/tmpfs)
    - sync /var (CF) with /varbak (CF/tmpfs)
-   - mount ramdisk/tmpfs on /var 
-   - start processess again
+   - mount ramdisk/tmpfs on /var again if needed
+   - start processess again if needed
    - unmount logfile tmpfs
 
 error-led.sh
