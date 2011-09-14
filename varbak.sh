@@ -7,7 +7,7 @@
 # BASH version : 4.1.5(1)-release
 # Requires     : grep pgrep free expr du uniq awk sed cut cat lsof touch
 #                initctl find rsync ps killall mount umount chmod mkdir 
-# Version      : 0.6
+# Version      : 0.7
 # Script type  : shutdown, reboot, cronjob
 # Task(s)      : copy files from /var ramdisk/tmpfs to /var on CompactFlash (CF).  
 
@@ -130,15 +130,18 @@ fi
 # start_excludes  Array of processes that we don't want to start again after stopping them. 
 #                 I.e. dhclient3. Usefull when we mount the root fs in read only.
 #                 This array must be filled manually.
+# rename_procs    Assoc. array to rename daemon/non-daemon processes which are using an other COMMAND name
+#                 as their PROCESS name. I.e. "rsyslogd" becomes "rsyslog", or "mysqld" becomes "mysql", ...
+#                 This array must be filled manually.
 
 # NOTE: A "start_list" assoc. array is not requiered. 
 #       We simply use the "stop_list" and "start_excluded" arrays instead.
 declare -a stop_excludes start_excludes
-declare -A stop_list  
+declare -A stop_list rename_procs
 
 stop_excludes=("`basename "$0"`" "grep" "cut" "uniq")
 start_excludes=("dhclient3" "dhclient")
-
+rename_procs=([rsyslogd]="rsyslog" [mysqld]="mysql")
 
 # /sbin/init invokes this script in runlevel 0 & 6 with the "stop" argument.
 # In that case we don't need to start the daemons/non-daemons again after they were stopped. 
@@ -297,7 +300,7 @@ function pkiller() {
 
 # This function checks if a process is really dead
 function chkd() {
-  if [[ `pgrep -g $pid` ]]; then
+  if [[ `pgrep "$p"` ]]; then
      echo "ERROR: Could not stop "$p". Aborting..." >>"$lf"
      exit 1
   else
@@ -313,9 +316,6 @@ function pstopper() {
 
   # Stop all daemons/non-daemons
   for p in ${!stop_list[@]} ; do
-
-    # Get p PID for the "chkd" function.
-    pid=`pgrep "$p"`
 
     echo "STOP-$n: Stopping "$p" ..." >>"$lf"
 
@@ -451,12 +451,16 @@ echo "" >>"$lf"
 # Build array "stop_list" with captured daemons/non-daemons, but ignore those 
 # mentioned in the "stop_excludes" array
 for p in $plist; do
-
-  # Rename rsyslogd to rsyslog !!
-  if [[ "$p" = "rsyslogd" ]]; then
-     echo "INFO: Renaming rsyslogd to rsyslog." >>"$lf"
-     p="rsyslog"
-  fi
+   
+  # Rename processes. This is needed because some procs have COMMAND names which are different 
+  # from their PROC names.
+  # I.e. "rsyslogd" => "rsyslog", "mysqld" => "mysql" ...
+  for pr in "${!rename_procs[@]}"; do
+      if [[ "$pr" = "$p" ]]; then
+         echo "INFO: Renaming $pr to ${rename_procs[$pr]}." >>"$lf"
+         p=${rename_procs[$pr]}
+      fi
+  done
 
   # Exclude p
   match=0
