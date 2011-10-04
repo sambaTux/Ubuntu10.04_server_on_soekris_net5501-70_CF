@@ -29,7 +29,7 @@
 ###   SECTION: Trap
 
 # Save command history of this script in array by using trap.
-# This may be usefull for debugging purpose in case of a script crash/error.
+# This may be useful for debugging purpose in case of a script crash/error.
 # This array is used by lastact().
 declare -a cmdhist
 trap 'cmdhist[${#cmdhist[@]}]=$BASH_COMMAND' DEBUG
@@ -168,7 +168,7 @@ ramdisk=`cat /proc/mounts | grep "/dev/ram." | cut -d ' ' -f 1`    #get ramdisk
 rdfstype=`cat /proc/mounts | grep "/dev/ram." | awk -F ' ' '{ print $3 }'`                #get ramdisk fs type
 rdmountopts=`cat /proc/mounts | grep "/dev/ram." | awk -F ' ' '{ print $(NF-2) }'`        #get ramdisk mount options
 tmpfsmountopts=`cat /proc/mounts | grep "^tmpfs $var " | awk -F ' ' '{ print $(NF-2) }'`  #get /var (tmpfs) mount options
-rsyncopts="-rogptl --delete-before"                                                       #options for rsync cmd
+rsyncopts="-rogptlD --delete-before"                                                      #options for rsync cmd
 
 
 # Check if "var2rd.sh" has created the mount point for the logfile (tmpfs).
