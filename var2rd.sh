@@ -34,7 +34,7 @@
 ###   SECTION: Trap
 
 # Save command history of this script in array by using trap.
-# This may be usefull for debugging purpose in case of a script crash/error.
+# This may be useful for debugging purpose in case of a script crash/error.
 # This array is used by lastact().
 declare -a cmdhist
 trap 'cmdhist[${#cmdhist[@]}]=$BASH_COMMAND' DEBUG
@@ -169,9 +169,9 @@ rdlabel="varrd"                            #ramdisk label
 rdfsck="off"                               #turn on/off /var (ramdisk) fsck. Options are: "on" and "off"
 rootfsck="off"                             #turn on/off / fsck. Options are: "on" and "off"
 tmpfsmountopts="rw,nosuid,nodev,nouser,size=200m"  #tmpfs mount options
-rsyncopts1="-rogptl --delete-before"                             #sync /varbak/{run,lock} (CF) with /var/{run,lock} (tmpfs)
-rsyncopts2="-rogptl --delete-before --exclude=err --exclude=run --exclude=lock"    #sync /varbak/ (CF) with /var/ (CF)
-rsyncopts3="-rogptl --delete-before"                             #sync /var (ramdisk) with /varbak (CF)
+rsyncopts1="-rogptlD --delete-before"                             #sync /varbak/{run,lock} (CF) with /var/{run,lock} (tmpfs)
+rsyncopts2="-rogptlD --delete-before --exclude=err --exclude=run --exclude=lock"    #sync /varbak/ (CF) with /var/ (CF)
+rsyncopts3="-rogptlD --delete-before"                             #sync /var (ramdisk) with /varbak (CF)
 
 # Make sure that this script doesn't run serveral times (for whatever reason).
 rdexists=`df | grep -wo ^"$ramdisk ".*" $var"$ || :`
@@ -183,7 +183,7 @@ if [[ -n "$rdexists" || -n "$tmpfsexists" ]]; then
 fi
 
 # Create mount points for the logfile (tmpfs) of "var2rd.sh" and "varbak.sh"
-# Creating it for "varbak.sh" now is usefull when we want to mount / in read only later.
+# Creating it for "varbak.sh" now is useful when we want to mount / in read only later.
 if [[ ! -d "$lfdir" ]]; then
    echo "MKDIR: Creating mount point $lfdir ..."
    mkdir -m 700 "$lfdir" 
