@@ -496,9 +496,13 @@ if [[ $memused -ge $mempeak ]]; then
    echo "INFO: Using varbak on CF because used RAM greater than configured RAM peak." >>"$lf"
    
    
-   # Activate warning led because memused is greater than mempeak.
+   # Deactivate running error-led.sh and activate warning led because memused is greater than mempeak.
    # But don't do it if we are in reboot/shutdown process.
    if [[ "$syshalt" != "stop" ]]; then
+      if [[ $(pgrep $(basename "$error_led")) ]]; then
+           echo "KILLALL: Killing $error_led ..." >>"$lf"
+           killall -e -9 `basename "$error_led"` >>"$lf" 2>&1
+           echo "KILLALL: Done." >>"$lf"
       echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
       "$error_led" --warning "$lf" & 
    fi
@@ -519,9 +523,13 @@ elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
      # Use /varbak on CF because we dont want to accupy to much RAM.
      echo "INFO: Using varbak on CF because we do not have enough free RAM." >>"$lf"
     
-     # Activate warning led because varsize is greater than maxtmpfssize.
+     # Deactivate running error-led.sh an activate warning led because varsize is greater than maxtmpfssize.
      # But don't do it if we are in reboot/shutdown process.
      if [[ "$syshalt" != "stop" ]]; then
+         if [[ $(pgrep $(basename "$error_led")) ]]; then
+           echo "KILLALL: Killing $error_led ..." >>"$lf"
+           killall -e -9 `basename "$error_led"` >>"$lf" 2>&1
+           echo "KILLALL: Done." >>"$lf"
          echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
          "$error_led" --warning "$lf" & 
      fi
