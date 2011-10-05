@@ -500,9 +500,10 @@ if [[ $memused -ge $mempeak ]]; then
    # But don't do it if we are in reboot/shutdown process.
    if [[ "$syshalt" != "stop" ]]; then
       if [[ $(pgrep $(basename "$error_led")) ]]; then
-           echo "KILLALL: Killing $error_led ..." >>"$lf"
-           killall -e -9 `basename "$error_led"` >>"$lf" 2>&1
-           echo "KILLALL: Done." >>"$lf"
+         echo "KILLALL: Killing $error_led ..." >>"$lf"
+         killall -e -9 `basename "$error_led"` >>"$lf" 2>&1
+         echo "KILLALL: Done." >>"$lf"
+      fi
       echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
       "$error_led" --warning "$lf" & 
    fi
@@ -526,12 +527,13 @@ elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
      # Deactivate running error-led.sh an activate warning led because varsize is greater than maxtmpfssize.
      # But don't do it if we are in reboot/shutdown process.
      if [[ "$syshalt" != "stop" ]]; then
-         if [[ $(pgrep $(basename "$error_led")) ]]; then
+        if [[ $(pgrep $(basename "$error_led")) ]]; then
            echo "KILLALL: Killing $error_led ..." >>"$lf"
            killall -e -9 `basename "$error_led"` >>"$lf" 2>&1
            echo "KILLALL: Done." >>"$lf"
-         echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
-         "$error_led" --warning "$lf" & 
+        fi
+        echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
+        "$error_led" --warning "$lf" & 
      fi
 
      # Stop daemons/non-daemons
@@ -548,16 +550,16 @@ else
      # Use /varbak on tmpfs because we have enough free RAM
      echo "INFO: Using varbak on tmpfs because there is enough free RAM." >>"$lf"
 
-     # Deactivate warning led because we have enough free RAM.
+     # Deactivate running error-led.sh and warning led because we have enough free RAM.
      # But don't do it if we are in reboot/shutdown process.
      if [[ "$syshalt" != "stop" ]]; then
         if [[ $(pgrep $(basename "$error_led")) ]]; then 
            echo "KILLALL: Killing $error_led ..." >>"$lf"
            killall -e -9 `basename "$error_led"` >>"$lf" 2>&1
            echo "KILLALL: Done." >>"$lf"
-           echo "INFO: Calling $error_led with --warn-off parameter ..." >>"$lf"
-           "$error_led" --warn-off "$lf" 
         fi
+        echo "INFO: Calling $error_led with --warn-off parameter ..." >>"$lf"
+        "$error_led" --warn-off "$lf" 
      fi
      
      # Mount tmpfs for data sync.
