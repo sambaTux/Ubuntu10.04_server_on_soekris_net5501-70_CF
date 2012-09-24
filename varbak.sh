@@ -29,17 +29,17 @@
 ###   SECTION: Trap
 
 # Save command history of this script in array by using trap.
-# This may be useful for debugging purpose in case of a script crash/error.
+# This may be usefull for debugging purpose in case of a script crash/error.
 # This array is used by lastact().
 declare -a cmdhist
-trap 'cmdhist[${#cmdhist[@]}]=$BASH_COMMAND' DEBUG
+#trap 'cmdhist[${#cmdhist[@]}]=$BASH_COMMAND' DEBUG
 
 # Path to "error-led.sh" script.
 error_led="/usr/local/sbin/error-led.sh"
 
 # This function is executed by "trap" and therefore not defined in the "function" section 
 function lastact() {
-
+ 
   # Exec. trap code only if an explicit exit code > 0, or a SIG??? has been trapped.
   # Like this the harmless "exit 0" is omitted. 
   if (( $? != 0 )); then
@@ -86,7 +86,8 @@ function lastact() {
 }
 
 # If sth. goes wrong ...
-trap 'lastact; exit 0' KILL TERM INT ERR EXIT
+#trap 'lastact; exit 0' KILL TERM INT ERR EXIT
+trap 'lastact; exit 0' KILL TERM INT
 
 
 ###################################################################################
@@ -140,7 +141,7 @@ declare -a stop_excludes start_excludes
 declare -A stop_list rename_procs
 
 stop_excludes=("`basename "$0"`" "grep" "cut" "uniq")
-start_excludes=("dhclient3" "dhclient")
+start_excludes=("dhclient3" "dhclient" "sendmail" "postdrop")
 rename_procs=([rsyslogd]="rsyslog" [mysqld]="mysql")
 
 # /sbin/init invokes this script in runlevel 0 & 6 with the "stop" argument.
@@ -157,13 +158,12 @@ t=`date +%Y.%m.%d-%H:%M:%S`
 var="/var"
 varbak="/varbak"
 memtotal=`free -m | grep '^Mem:' | awk -F ' ' '{ print $2 }'`      #total system RAM
-memused=`free -m | grep '^Mem:' | awk -F ' ' '{ print $3 }'`       #RAM currently used by OS
-memdiff=`expr $memtotal - $memused`                              
-mempeak=`expr $memtotal / 4 \* 3`                                  #set RAM threshold
+memfree=`free -m | grep '^-/+' | awk -F ' ' '{ print $4 }'`
+memmin=50                                                          # min. RAM needed to use ramdisk/tmpfs
 varsize=`du -sh "$var" | awk -F ' ' '{ print $1 }' | sed 's/.$//'` #current size of /var (CF)
 tmpfssize=`expr $varsize + 10`                                     #set tmpfs size used for data sync.
 tmpfssize="${tmpfssize}m"                                          #set tmpfs size in MB.
-maxtmpfssize="170"                                                 #max. size of tmpfs for data sync.
+maxtmpfssize="250"                                                 #max. size of tmpfs for data sync.
 ramdisk=`cat /proc/mounts | grep "/dev/ram." | cut -d ' ' -f 1`    #get ramdisk
 rdfstype=`cat /proc/mounts | grep "/dev/ram." | awk -F ' ' '{ print $3 }'`                #get ramdisk fs type
 rdmountopts=`cat /proc/mounts | grep "/dev/ram." | awk -F ' ' '{ print $(NF-2) }'`        #get ramdisk mount options
@@ -230,9 +230,10 @@ fi
 # Write brief overview into logfile
 echo "" >>"$lf"
 echo "MemTotal:            $memtotal MB"     >>"$lf"
-echo "MemUsed:             $memused MB"      >>"$lf"
-echo "MemDiff:             $memdiff MB"      >>"$lf"
-echo "MemPeak:             $mempeak MB"      >>"$lf"
+echo "MemFree:             $memfree MB"      >>"$lf"
+#echo "MemUsed:             $memused MB"      >>"$lf"
+#echo "MemDiff:             $memdiff MB"      >>"$lf"
+#echo "MemPeak:             $mempeak MB"      >>"$lf"
 echo "$var size:           $varsize MB"      >>"$lf"
 echo "$varbak tmpfs size:  ${tmpfssize%?} MB"     >>"$lf"
 echo "tmpfs max. size:     $maxtmpfssize MB"      >>"$lf"
@@ -278,12 +279,12 @@ function get_ptype() {
 function pkiller() {
 
  echo "INFO: "$p" is a non-daemon. Killing it gracefully ..." >>"$lf"
- killall -e -15 "$p" >>"$lf" 2>&1
+ killall -15 "$p" >>"$lf" 2>&1
 
  # Check if process was really killed, if not, try to kill it hardly
  if [[ $(ps -e | grep -wo "$p") ]]; then
     echo "INFO: Non-daemon "$p" is unwilling to die. Killing it brutal ..." >>"$lf"
-    killall -e -9 "$p" >>"$lf" 2>&1
+    killall -9 "$p" >>"$lf" 2>&1
 
     # Check again if process is really dead
     if [[ ! $(ps -e | grep -wo "$p") ]]; then
@@ -389,7 +390,7 @@ function syncer() {
           echo "MOUNT: Done." >>"$lf"
 
          # Unlike ramdisk, tmpfs loses all data after unmounting it.
-         # Hence we have to sync. /var (tmpfs) with /varbak (tmpfs/CF).
+         # Hence we have to sync /var (tmpfs) with /varbak (tmpfs/CF).
          echo "RSYNC: Start sync $var (tmpfs) with $varbak (tmpfs/CF)" >>"$lf" 
          rsync $rsyncopts "${varbak}/" "${var}/" >>"$lf" 2>&1
          echo "RSYNC: Done." >>"$lf"
@@ -449,7 +450,7 @@ echo "$plist" >>"$lf"
 echo "" >>"$lf"
 
 # Build array "stop_list" with captured daemons/non-daemons, but ignore those 
-# mentioned in the "stop_excludes" array
+# mentioned in the "stop_excludes" array.
 for p in $plist; do
    
   # Rename processes. This is needed because some procs have COMMAND names which are different 
@@ -486,24 +487,25 @@ done
 echo "" >>"$lf"
 
 
-# If used memory is greater than memory peak, we will use /varbak on CF as a cache 
+# If free memory is less than min. memory, we will use /varbak on CF as a cache 
 # to sync back data from /var ramdisk/tmpfs to /var on CF. Otherwise we use /varbak 
 # tmpfs to sync back the data.
 
-if [[ $memused -ge $mempeak ]]; then
+if [[ $memfree -le $memmin ]]; then
 
    # Sync data by using /varbak on CF
-   echo "INFO: Using varbak on CF because used RAM greater than configured RAM peak." >>"$lf"
+   echo "INFO: Using varbak on CF because free RAM less than configured min. RAM." >>"$lf"
    
    
-   # Deactivate running error-led.sh and activate warning led because memused is greater than mempeak.
+   # Deactivate running error-led.sh and activate warning led because memfree is less than memmin.
    # But don't do it if we are in reboot/shutdown process.
    if [[ "$syshalt" != "stop" ]]; then
       if [[ $(pgrep $(basename "$error_led")) ]]; then
          echo "KILLALL: Killing $error_led ..." >>"$lf"
-         killall -e -9 `basename "$error_led"` >>"$lf" 2>&1
+         killall -9 `basename "$error_led"` >>"$lf" 2>&1
          echo "KILLALL: Done." >>"$lf"
       fi
+
       echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
       "$error_led" --warning "$lf" & 
    fi
@@ -519,19 +521,20 @@ if [[ $memused -ge $mempeak ]]; then
       echo "INFO: We are in reboot/shutdown process...will not restart daemons/non-daemons." >>"$lf"
    fi
    
-elif [[ $memused -lt $mempeak ]] && [[ $varsize -gt $maxtmpfssize ]]; then
+elif [[ $memfree -gt $memmin ]] && [[ $varsize -gt $maxtmpfssize ]]; then
 
-     # Use /varbak on CF because we dont want to accupy to much RAM.
+     # Use /varbak on CF because we dont want to accupy to much RAM for tmpfs.
      echo "INFO: Using varbak on CF because we do not have enough free RAM." >>"$lf"
     
-     # Deactivate running error-led.sh an activate warning led because varsize is greater than maxtmpfssize.
+     # Deactivate running error-led.sh and activate warning led because varsize is greater than maxtmpfssize.
      # But don't do it if we are in reboot/shutdown process.
      if [[ "$syshalt" != "stop" ]]; then
         if [[ $(pgrep $(basename "$error_led")) ]]; then
            echo "KILLALL: Killing $error_led ..." >>"$lf"
-           killall -e -9 `basename "$error_led"` >>"$lf" 2>&1
+           killall -9 `basename "$error_led"` >>"$lf" 2>&1
            echo "KILLALL: Done." >>"$lf"
         fi
+
         echo "INFO: Calling $error_led with --warning parameter ..." >>"$lf"
         "$error_led" --warning "$lf" & 
      fi
@@ -555,9 +558,10 @@ else
      if [[ "$syshalt" != "stop" ]]; then
         if [[ $(pgrep $(basename "$error_led")) ]]; then 
            echo "KILLALL: Killing $error_led ..." >>"$lf"
-           killall -e -9 `basename "$error_led"` >>"$lf" 2>&1
+           killall -9 `basename "$error_led"` >>"$lf" 2>&1
            echo "KILLALL: Done." >>"$lf"
         fi
+
         echo "INFO: Calling $error_led with --warn-off parameter ..." >>"$lf"
         "$error_led" --warn-off "$lf" 
      fi
@@ -608,6 +612,7 @@ echo "" >>"$lf"
 echo "["$t"]: END "$0"" >>"$lf"
 echo "##################################################" >>"$lf"
 echo "" >>"$lf"
+
 
 # Happy end 
 exit 0
