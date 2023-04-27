@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Title        : var2rd.sh
+# Title        : var2rd.sh 
 # Author       : sambaTux <sambatux AT web DOT de>
 # Start date   : 09.08.2011
 # OS tested    : Ubuntu10.04
